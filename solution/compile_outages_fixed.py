@@ -9,8 +9,14 @@ import json
 from pathlib import Path
 
 SEVERITY_RANK = {"minor": 1, "major": 2, "critical": 3}
+SEVERITY_ORDER = ("critical", "major", "minor")
 PRIORITY_ORDER = ("critical", "high", "medium")
 MAINTENANCE_PATH = Path("/app/data/maintenance_windows.json")
+SERVICE_ALIASES = {
+    "authentication": "auth",
+    "payments": "billing",
+    "search-api": "search",
+}
 
 
 def load_outages(path: Path) -> list[dict]:
@@ -29,17 +35,59 @@ def normalize_bool(value: object) -> bool:
     return bool(value)
 
 
+def normalize_service(value: object) -> str:
+    normalized = str(value if value is not None else "").strip().lower()
+    return SERVICE_ALIASES.get(normalized, normalized)
+
+
+def normalize_severity(value: object) -> str:
+    normalized = str(value if value is not None else "").strip().lower()
+    return normalized if normalized in SEVERITY_RANK else "minor"
+
+
+def normalize_ms(value: object) -> int:
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return 0
+
+
 def canonicalize(rows: list[dict]) -> list[dict]:
     deduped: dict[str, dict] = {}
     for row in rows:
         normalized = dict(row)
-        normalized["service"] = str(normalized.get("service", "")).strip().lower()
-        normalized["severity"] = str(normalized.get("severity", "")).strip().lower()
+        normalized["service"] = normalize_service(normalized.get("service", ""))
+        normalized["severity"] = normalize_severity(normalized.get("severity", ""))
         normalized["planned"] = normalize_bool(normalized.get("planned", False))
+        normalized["start_ms"] = normalize_ms(normalized.get("start_ms", 0))
+        normalized["end_ms"] = normalize_ms(normalized.get("end_ms", 0))
+        if normalized["end_ms"] < normalized["start_ms"]:
+            normalized["end_ms"] = normalized["start_ms"]
         incident_id = str(normalized["incident_id"])
         current = deduped.get(incident_id)
-        if current is None or normalized["end_ms"] > current["end_ms"]:
+        if current is None:
             deduped[incident_id] = normalized
+            continue
+        replace = False
+        if normalized["end_ms"] > current["end_ms"]:
+            replace = True
+        elif normalized["end_ms"] == current["end_ms"]:
+            next_rank = SEVERITY_RANK[normalized["severity"]]
+            current_rank = SEVERITY_RANK[current["severity"]]
+            if next_rank > current_rank:
+                replace = True
+            elif next_rank == current_rank:
+                if current["planned"] and not normalized["planned"]:
+                    replace = True
+                elif current["planned"] == normalized["planned"]:
+                    if normalized["start_ms"] > current["start_ms"]:
+                        replace = True
+                    elif normalized["start_ms"] == current["start_ms"]:
+                        if normalized["service"] > current["service"]:
+                            replace = True
+        if replace:
+            deduped[incident_id] = normalized
+
     return sorted(
         deduped.values(),
         key=lambda row: (row["service"], row["start_ms"], str(row["incident_id"])),
@@ -53,8 +101,14 @@ def overlap_ms(start_a: int, end_a: int, start_b: int, end_b: int) -> int:
 def maintenance_by_service(maintenance_rows: list[dict]) -> dict[str, list[tuple[int, int]]]:
     by_service: dict[str, list[tuple[int, int]]] = {}
     for row in maintenance_rows:
-        service = str(row.get("service", "")).strip().lower()
-        by_service.setdefault(service, []).append((int(row["start_ms"]), int(row["end_ms"])))
+        service = normalize_service(row.get("service", ""))
+        start = normalize_ms(row.get("start_ms", 0))
+        end = normalize_ms(row.get("end_ms", 0))
+        if end <= start:
+            continue
+        by_service.setdefault(service, []).append((start, end))
+    for service in by_service:
+        by_service[service].sort()
     return by_service
 
 
@@ -81,6 +135,7 @@ def merge_windows(
                         "start_ms": row["start_ms"],
                         "end_ms": row["end_ms"],
                         "incident_count": 1,
+                        "critical_incident_count": 1 if row["severity"] == "critical" else 0,
                         "source_incident_ids": [str(row["incident_id"])],
                         "max_severity": row["severity"],
                     }
@@ -88,9 +143,11 @@ def merge_windows(
                 continue
 
             prev = merged[-1]
-            if row["start_ms"] <= prev["end_ms"]:
+            if row["start_ms"] <= prev["end_ms"] + 30:
                 prev["end_ms"] = max(prev["end_ms"], row["end_ms"])
                 prev["incident_count"] += 1
+                if row["severity"] == "critical":
+                    prev["critical_incident_count"] += 1
                 incident_id = str(row["incident_id"])
                 if incident_id not in prev["source_incident_ids"]:
                     prev["source_incident_ids"].append(incident_id)
@@ -102,6 +159,7 @@ def merge_windows(
                         "start_ms": row["start_ms"],
                         "end_ms": row["end_ms"],
                         "incident_count": 1,
+                        "critical_incident_count": 1 if row["severity"] == "critical" else 0,
                         "source_incident_ids": [str(row["incident_id"])],
                         "max_severity": row["severity"],
                     }
@@ -115,6 +173,12 @@ def merge_windows(
                 overlap_total += overlap_ms(block["start_ms"], block["end_ms"], start, end)
             block["maintenance_overlap_ms"] = overlap_total
             block["billable_duration_ms"] = max(block["duration_ms"] - overlap_total, 0)
+            block["window_signature"] = hashlib.sha1(
+                (
+                    f"{service}|{block['start_ms']}|{block['end_ms']}|"
+                    f"{','.join(block['source_incident_ids'])}|{block['max_severity']}"
+                ).encode("utf-8")
+            ).hexdigest()[:10]
 
         windows[service] = merged
 
@@ -125,23 +189,28 @@ def build_queue(windows: dict[str, list[dict]]) -> list[dict]:
     rows: list[dict] = []
     for service, blocks in windows.items():
         for block in blocks:
-            if block["billable_duration_ms"] < 250:
+            if block["billable_duration_ms"] < 220:
                 continue
             if (
-                block["max_severity"] == "critical" and block["billable_duration_ms"] >= 300
-            ) or block["billable_duration_ms"] >= 700:
+                (block["max_severity"] == "critical" and block["billable_duration_ms"] >= 280)
+                or block["billable_duration_ms"] >= 650
+                or block["critical_incident_count"] >= 2
+            ):
                 priority = "critical"
-            elif block["billable_duration_ms"] >= 350 or (
-                block["incident_count"] >= 3 and block["max_severity"] in {"major", "critical"}
+            elif (
+                block["billable_duration_ms"] >= 320
+                or (block["incident_count"] >= 3 and block["max_severity"] in {"major", "critical"})
+                or (block["maintenance_overlap_ms"] == 0 and block["duration_ms"] >= 450)
             ):
                 priority = "high"
             else:
                 priority = "medium"
             incident_ids_csv = ",".join(block["source_incident_ids"])
             signature = hashlib.sha1(
-                f"{service}|{block['start_ms']}|{block['end_ms']}|{incident_ids_csv}".encode(
-                    "utf-8"
-                )
+                (
+                    f"{service}|{block['start_ms']}|{block['end_ms']}|"
+                    f"{incident_ids_csv}|{block['window_signature']}"
+                ).encode("utf-8")
             ).hexdigest()[:12]
             rows.append(
                 {
@@ -153,8 +222,10 @@ def build_queue(windows: dict[str, list[dict]]) -> list[dict]:
                     "maintenance_overlap_ms": block["maintenance_overlap_ms"],
                     "billable_duration_ms": block["billable_duration_ms"],
                     "incident_count": block["incident_count"],
+                    "critical_incident_count": block["critical_incident_count"],
                     "source_incident_ids": block["source_incident_ids"],
                     "max_severity": block["max_severity"],
+                    "window_signature": block["window_signature"],
                     "priority": priority,
                     "outage_signature": signature,
                 }
@@ -165,6 +236,7 @@ def build_queue(windows: dict[str, list[dict]]) -> list[dict]:
         key=lambda row: (
             rank[row["priority"]],
             -row["billable_duration_ms"],
+            -row["critical_incident_count"],
             -row["incident_count"],
             row["service"],
             row["start_ms"],
@@ -180,25 +252,33 @@ def build_summary(
     queue: list[dict],
     planned_excluded_count: int,
 ) -> dict:
-    severity_counts = {"critical": 0, "major": 0, "minor": 0}
+    severity_counts = {name: 0 for name in SEVERITY_ORDER}
     for row in canonical_rows:
-        severity = row["severity"]
-        if severity in severity_counts:
-            severity_counts[severity] += 1
+        severity_counts[row["severity"]] += 1
 
-    total_unplanned_downtime_ms = sum(
-        block["duration_ms"] for blocks in windows.values() for block in blocks
-    )
-    total_maintenance_overlap_ms = sum(
+    total_unplanned = sum(block["duration_ms"] for blocks in windows.values() for block in blocks)
+    total_maintenance = sum(
         block["maintenance_overlap_ms"] for blocks in windows.values() for block in blocks
     )
-    total_billable_downtime_ms = sum(
+    total_billable = sum(
         block["billable_duration_ms"] for blocks in windows.values() for block in blocks
     )
-    longest_window_ms = max(
+    longest_window = max(
         (block["duration_ms"] for blocks in windows.values() for block in blocks),
         default=0,
     )
+    critical_window_count = sum(
+        1 for blocks in windows.values() for block in blocks if block["max_severity"] == "critical"
+    )
+    canonical_input_checksum = hashlib.sha256(
+        "\n".join(
+            (
+                f"{row['incident_id']}|{row['service']}|{row['start_ms']}|"
+                f"{row['end_ms']}|{row['severity']}|{1 if row['planned'] else 0}"
+            )
+            for row in canonical_rows
+        ).encode("utf-8")
+    ).hexdigest()
     queue_signature_checksum = hashlib.sha256(
         "|".join(row["outage_signature"] for row in queue).encode("utf-8")
     ).hexdigest()
@@ -210,12 +290,14 @@ def build_summary(
         "canonical_incident_count": len(canonical_rows),
         "service_count": len(windows),
         "severity_counts": severity_counts,
-        "total_unplanned_downtime_ms": total_unplanned_downtime_ms,
-        "total_maintenance_overlap_ms": total_maintenance_overlap_ms,
-        "total_billable_downtime_ms": total_billable_downtime_ms,
-        "longest_window_ms": longest_window_ms,
+        "total_unplanned_downtime_ms": total_unplanned,
+        "total_maintenance_overlap_ms": total_maintenance,
+        "total_billable_downtime_ms": total_billable,
+        "longest_window_ms": longest_window,
         "queued_window_count": len(queue),
         "planned_excluded_count": planned_excluded_count,
+        "critical_window_count": critical_window_count,
+        "canonical_input_checksum": canonical_input_checksum,
         "queue_signature_checksum": queue_signature_checksum,
     }
 

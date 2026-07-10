@@ -5,10 +5,10 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -24,15 +24,21 @@ ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 FIXTURE_PATH = Path("/tests/fixtures/expected_outputs.json")
 FIXTURE = json.loads(FIXTURE_PATH.read_text())
 
-PRIORITY_ORDER = ("critical", "high", "medium")
 SEVERITY_RANK = {"minor": 1, "major": 2, "critical": 3}
+SEVERITY_ORDER = ("critical", "major", "minor")
+PRIORITY_ORDER = ("critical", "high", "medium")
+SERVICE_ALIASES = {
+    "authentication": "auth",
+    "payments": "billing",
+    "search-api": "search",
+}
 
 
 def _run_pipeline(
     pipeline: Path = PIPELINE,
     input_path: Path = INPUT_PATH,
     output_dir: Path = OUTPUT_DIR,
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             "python3",
@@ -52,12 +58,37 @@ def _load_json(path: Path):
     return json.loads(path.read_text())
 
 
+def _load_jsonl(path: Path) -> list[dict]:
+    rows: list[dict] = []
+    for line in path.read_text().splitlines():
+        if line.strip():
+            rows.append(json.loads(line))
+    return rows
+
+
 def _normalize_bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
         return value.strip().lower() in {"true", "1", "yes"}
     return bool(value)
+
+
+def _normalize_service(value: object) -> str:
+    normalized = str(value if value is not None else "").strip().lower()
+    return SERVICE_ALIASES.get(normalized, normalized)
+
+
+def _normalize_severity(value: object) -> str:
+    normalized = str(value if value is not None else "").strip().lower()
+    return normalized if normalized in SEVERITY_RANK else "minor"
+
+
+def _normalize_ms(value: object) -> int:
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return 0
 
 
 def _executable_text(src: str) -> str:
@@ -92,12 +123,39 @@ def _canonicalize(rows: list[dict]) -> list[dict]:
     for row in rows:
         incident_id = str(row["incident_id"])
         normalized = dict(row)
-        normalized["service"] = str(normalized.get("service", "")).strip().lower()
-        normalized["severity"] = str(normalized.get("severity", "")).strip().lower()
+        normalized["service"] = _normalize_service(normalized.get("service", ""))
+        normalized["severity"] = _normalize_severity(normalized.get("severity", ""))
         normalized["planned"] = _normalize_bool(normalized.get("planned", False))
+        normalized["start_ms"] = _normalize_ms(normalized.get("start_ms", 0))
+        normalized["end_ms"] = _normalize_ms(normalized.get("end_ms", 0))
+        if normalized["end_ms"] < normalized["start_ms"]:
+            normalized["end_ms"] = normalized["start_ms"]
+
         current = deduped.get(incident_id)
-        if current is None or normalized["end_ms"] > current["end_ms"]:
+        if current is None:
             deduped[incident_id] = normalized
+            continue
+
+        replace = False
+        if normalized["end_ms"] > current["end_ms"]:
+            replace = True
+        elif normalized["end_ms"] == current["end_ms"]:
+            next_rank = SEVERITY_RANK[normalized["severity"]]
+            current_rank = SEVERITY_RANK[current["severity"]]
+            if next_rank > current_rank:
+                replace = True
+            elif next_rank == current_rank:
+                if current["planned"] and not normalized["planned"]:
+                    replace = True
+                elif current["planned"] == normalized["planned"]:
+                    if normalized["start_ms"] > current["start_ms"]:
+                        replace = True
+                    elif normalized["start_ms"] == current["start_ms"]:
+                        if normalized["service"] > current["service"]:
+                            replace = True
+        if replace:
+            deduped[incident_id] = normalized
+
     return sorted(
         deduped.values(),
         key=lambda row: (row["service"], row["start_ms"], str(row["incident_id"])),
@@ -107,8 +165,14 @@ def _canonicalize(rows: list[dict]) -> list[dict]:
 def _maintenance_by_service(rows: list[dict]) -> dict[str, list[tuple[int, int]]]:
     out: dict[str, list[tuple[int, int]]] = {}
     for row in rows:
-        service = str(row.get("service", "")).strip().lower()
-        out.setdefault(service, []).append((int(row["start_ms"]), int(row["end_ms"])))
+        service = _normalize_service(row.get("service", ""))
+        start = _normalize_ms(row.get("start_ms", 0))
+        end = _normalize_ms(row.get("end_ms", 0))
+        if end <= start:
+            continue
+        out.setdefault(service, []).append((start, end))
+    for service in out:
+        out[service].sort()
     return out
 
 
@@ -139,18 +203,21 @@ def _merge_unplanned(
                         "start_ms": row["start_ms"],
                         "end_ms": row["end_ms"],
                         "incident_count": 1,
+                        "critical_incident_count": 1 if row["severity"] == "critical" else 0,
                         "source_incident_ids": [str(row["incident_id"])],
                         "max_severity": row["severity"],
                     }
                 )
                 continue
             prev = merged[-1]
-            if row["start_ms"] <= prev["end_ms"]:
+            if row["start_ms"] <= prev["end_ms"] + 30:
                 prev["end_ms"] = max(prev["end_ms"], row["end_ms"])
                 prev["incident_count"] += 1
-                event_id = str(row["incident_id"])
-                if event_id not in prev["source_incident_ids"]:
-                    prev["source_incident_ids"].append(event_id)
+                if row["severity"] == "critical":
+                    prev["critical_incident_count"] += 1
+                incident_id = str(row["incident_id"])
+                if incident_id not in prev["source_incident_ids"]:
+                    prev["source_incident_ids"].append(incident_id)
                 if SEVERITY_RANK[row["severity"]] > SEVERITY_RANK[prev["max_severity"]]:
                     prev["max_severity"] = row["severity"]
             else:
@@ -159,6 +226,7 @@ def _merge_unplanned(
                         "start_ms": row["start_ms"],
                         "end_ms": row["end_ms"],
                         "incident_count": 1,
+                        "critical_incident_count": 1 if row["severity"] == "critical" else 0,
                         "source_incident_ids": [str(row["incident_id"])],
                         "max_severity": row["severity"],
                     }
@@ -172,6 +240,13 @@ def _merge_unplanned(
                 overlap += _overlap_ms(block["start_ms"], block["end_ms"], start, end)
             block["maintenance_overlap_ms"] = overlap
             block["billable_duration_ms"] = max(block["duration_ms"] - overlap, 0)
+            block["window_signature"] = hashlib.sha1(
+                (
+                    f"{service}|{block['start_ms']}|{block['end_ms']}|"
+                    f"{','.join(block['source_incident_ids'])}|{block['max_severity']}"
+                ).encode("utf-8")
+            ).hexdigest()[:10]
+
         windows[service] = merged
 
     return windows, planned_excluded_count
@@ -181,17 +256,19 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
     rows: list[dict] = []
     for service, blocks in windows.items():
         for block in blocks:
-            if block["billable_duration_ms"] < 250:
+            if block["billable_duration_ms"] < 220:
                 continue
 
             if (
-                block["max_severity"] == "critical"
-                and block["billable_duration_ms"] >= 300
-            ) or block["billable_duration_ms"] >= 700:
+                (block["max_severity"] == "critical" and block["billable_duration_ms"] >= 280)
+                or block["billable_duration_ms"] >= 650
+                or block["critical_incident_count"] >= 2
+            ):
                 priority = "critical"
-            elif block["billable_duration_ms"] >= 350 or (
-                block["incident_count"] >= 3
-                and block["max_severity"] in {"major", "critical"}
+            elif (
+                block["billable_duration_ms"] >= 320
+                or (block["incident_count"] >= 3 and block["max_severity"] in {"major", "critical"})
+                or (block["maintenance_overlap_ms"] == 0 and block["duration_ms"] >= 450)
             ):
                 priority = "high"
             else:
@@ -199,7 +276,10 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
 
             ids_csv = ",".join(block["source_incident_ids"])
             signature = hashlib.sha1(
-                f"{service}|{block['start_ms']}|{block['end_ms']}|{ids_csv}".encode("utf-8")
+                (
+                    f"{service}|{block['start_ms']}|{block['end_ms']}|"
+                    f"{ids_csv}|{block['window_signature']}"
+                ).encode("utf-8")
             ).hexdigest()[:12]
 
             rows.append(
@@ -212,8 +292,10 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
                     "maintenance_overlap_ms": block["maintenance_overlap_ms"],
                     "billable_duration_ms": block["billable_duration_ms"],
                     "incident_count": block["incident_count"],
+                    "critical_incident_count": block["critical_incident_count"],
                     "source_incident_ids": block["source_incident_ids"],
                     "max_severity": block["max_severity"],
+                    "window_signature": block["window_signature"],
                     "priority": priority,
                     "outage_signature": signature,
                 }
@@ -224,6 +306,7 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
         key=lambda row: (
             rank[row["priority"]],
             -row["billable_duration_ms"],
+            -row["critical_incident_count"],
             -row["incident_count"],
             row["service"],
             row["start_ms"],
@@ -239,10 +322,9 @@ def _build_summary(
     queue: list[dict],
     planned_excluded_count: int,
 ) -> dict:
-    severity_counts = {"critical": 0, "major": 0, "minor": 0}
+    severity_counts = {name: 0 for name in SEVERITY_ORDER}
     for row in canonical_rows:
-        if row["severity"] in severity_counts:
-            severity_counts[row["severity"]] += 1
+        severity_counts[row["severity"]] += 1
 
     total_unplanned = sum(block["duration_ms"] for blocks in windows.values() for block in blocks)
     total_maintenance = sum(
@@ -252,8 +334,21 @@ def _build_summary(
         block["billable_duration_ms"] for blocks in windows.values() for block in blocks
     )
     longest_window = max(
-        (block["duration_ms"] for blocks in windows.values() for block in blocks), default=0
+        (block["duration_ms"] for blocks in windows.values() for block in blocks),
+        default=0,
     )
+    critical_window_count = sum(
+        1 for blocks in windows.values() for block in blocks if block["max_severity"] == "critical"
+    )
+    canonical_input_checksum = hashlib.sha256(
+        "\n".join(
+            (
+                f"{row['incident_id']}|{row['service']}|{row['start_ms']}|{row['end_ms']}|"
+                f"{row['severity']}|{1 if row['planned'] else 0}"
+            )
+            for row in canonical_rows
+        ).encode("utf-8")
+    ).hexdigest()
     checksum = hashlib.sha256(
         "|".join(row["outage_signature"] for row in queue).encode("utf-8")
     ).hexdigest()
@@ -271,6 +366,8 @@ def _build_summary(
         "longest_window_ms": longest_window,
         "queued_window_count": len(queue),
         "planned_excluded_count": planned_excluded_count,
+        "critical_window_count": critical_window_count,
+        "canonical_input_checksum": canonical_input_checksum,
         "queue_signature_checksum": checksum,
     }
 
@@ -283,14 +380,6 @@ def _expected_from_input(path: Path) -> tuple[dict, dict[str, list[dict]], list[
     queue = _queue_from_windows(windows)
     summary = _build_summary(raw_rows, canonical_rows, windows, queue, planned_count)
     return summary, windows, queue
-
-
-def _queue_rows(path: Path = QUEUE_PATH) -> list[dict]:
-    rows: list[dict] = []
-    for line in path.read_text().splitlines():
-        if line.strip():
-            rows.append(json.loads(line))
-    return rows
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -314,7 +403,7 @@ def windows() -> dict[str, list[dict]]:
 
 @pytest.fixture(scope="session")
 def queue_rows() -> list[dict]:
-    return _queue_rows()
+    return _load_jsonl(QUEUE_PATH)
 
 
 def test_cli_exists():
@@ -333,7 +422,7 @@ def test_output_dir_contains_exactly_three_files():
 
 
 def test_summary_schema(summary: dict):
-    for key in (
+    assert set(summary.keys()) == {
         "schema_version",
         "raw_incident_count",
         "unique_incident_ids",
@@ -346,11 +435,13 @@ def test_summary_schema(summary: dict):
         "longest_window_ms",
         "queued_window_count",
         "planned_excluded_count",
+        "critical_window_count",
+        "canonical_input_checksum",
         "queue_signature_checksum",
-    ):
-        assert key in summary
+    }
     assert summary["schema_version"] == "outage-windows-v1"
-    assert list(summary["severity_counts"].keys()) == ["critical", "major", "minor"]
+    assert list(summary["severity_counts"].keys()) == list(SEVERITY_ORDER)
+    assert len(summary["canonical_input_checksum"]) == 64
     assert len(summary["queue_signature_checksum"]) == 64
 
 
@@ -364,12 +455,7 @@ def test_service_windows_match_expected_computation(windows: dict[str, list[dict
     assert windows == expected_windows
 
 
-def test_queue_window_ids_match_expected_computation(queue_rows: list[dict]):
-    _, _, expected_queue = _expected_from_input(INPUT_PATH)
-    assert [row["window_id"] for row in queue_rows] == [row["window_id"] for row in expected_queue]
-
-
-def test_queue_computed_from_input(queue_rows: list[dict]):
+def test_queue_matches_expected_computation(queue_rows: list[dict]):
     _, _, expected_queue = _expected_from_input(INPUT_PATH)
     assert queue_rows == expected_queue
 
@@ -384,8 +470,10 @@ def test_queue_required_fields(queue_rows: list[dict]):
         "maintenance_overlap_ms",
         "billable_duration_ms",
         "incident_count",
+        "critical_incident_count",
         "source_incident_ids",
         "max_severity",
+        "window_signature",
         "priority",
         "outage_signature",
     }
@@ -393,17 +481,22 @@ def test_queue_required_fields(queue_rows: list[dict]):
         assert set(row.keys()) == expected_keys
         assert isinstance(row["source_incident_ids"], list)
         assert row["source_incident_ids"] == sorted(row["source_incident_ids"])
+        assert len(row["window_signature"]) == 10
         assert len(row["outage_signature"]) == 12
 
 
 def test_priority_rules(queue_rows: list[dict]):
     for row in queue_rows:
-        if (row["max_severity"] == "critical" and row["billable_duration_ms"] >= 300) or row[
-            "billable_duration_ms"
-        ] >= 700:
+        if (
+            (row["max_severity"] == "critical" and row["billable_duration_ms"] >= 280)
+            or row["billable_duration_ms"] >= 650
+            or row["critical_incident_count"] >= 2
+        ):
             assert row["priority"] == "critical"
-        elif row["billable_duration_ms"] >= 350 or (
-            row["incident_count"] >= 3 and row["max_severity"] in {"major", "critical"}
+        elif (
+            row["billable_duration_ms"] >= 320
+            or (row["incident_count"] >= 3 and row["max_severity"] in {"major", "critical"})
+            or (row["maintenance_overlap_ms"] == 0 and row["duration_ms"] >= 450)
         ):
             assert row["priority"] == "high"
         else:
@@ -416,6 +509,7 @@ def test_queue_sorted(queue_rows: list[dict]):
         (
             rank[row["priority"]],
             -row["billable_duration_ms"],
+            -row["critical_incident_count"],
             -row["incident_count"],
             row["service"],
             row["start_ms"],
@@ -447,8 +541,10 @@ def test_windows_are_sorted_and_have_extra_fields(windows: dict[str, list[dict]]
                 "maintenance_overlap_ms",
                 "billable_duration_ms",
                 "incident_count",
+                "critical_incident_count",
                 "source_incident_ids",
                 "max_severity",
+                "window_signature",
             }
 
 
@@ -464,9 +560,6 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
     assert summary["total_maintenance_overlap_ms"] == total_overlap
     assert summary["total_billable_downtime_ms"] == total_billable
     assert total_billable <= total_duration
-    assert summary["longest_window_ms"] == max(
-        (block["duration_ms"] for blocks in windows.values() for block in blocks), default=0
-    )
 
 
 def test_original_snapshot_preserved():
@@ -488,7 +581,7 @@ def test_broken_snapshot_is_wrong():
         shutil.copy(ORIGINAL_PIPELINE, broken)
         result = _run_pipeline(pipeline=broken, output_dir=out)
         assert result.returncode == 0, result.stderr
-        queue = _queue_rows(out / "incident_queue.jsonl")
+        queue = _load_jsonl(out / "incident_queue.jsonl")
         _, _, expected_queue = _expected_from_input(INPUT_PATH)
         assert len(queue) == FIXTURE["broken_queue_count"]
         assert len(queue) != len(expected_queue)
@@ -501,7 +594,7 @@ def test_pipeline_rerun_idempotent(summary: dict, queue_rows: list[dict]):
         result = _run_pipeline(output_dir=rerun_dir)
         assert result.returncode == 0, result.stderr
         rerun_summary = _load_json(rerun_dir / "downtime_summary.json")
-        rerun_queue = _queue_rows(rerun_dir / "incident_queue.jsonl")
+        rerun_queue = _load_jsonl(rerun_dir / "incident_queue.jsonl")
         assert rerun_summary == summary
         assert rerun_queue == queue_rows
 
@@ -513,29 +606,10 @@ def test_pipeline_supports_alternate_input():
         result = _run_pipeline(input_path=ALT_INPUT_PATH, output_dir=out)
         assert result.returncode == 0, result.stderr
         summary = _load_json(out / "downtime_summary.json")
-        queue_rows = _queue_rows(out / "incident_queue.jsonl")
+        queue_rows = _load_jsonl(out / "incident_queue.jsonl")
         expected_summary, _, expected_queue = _expected_from_input(ALT_INPUT_PATH)
         assert summary == expected_summary
         assert queue_rows == expected_queue
-
-
-def test_alternate_input_expected_values():
-    expected_summary, _, expected_queue = _expected_from_input(ALT_INPUT_PATH)
-    assert expected_summary["raw_incident_count"] == 7
-    assert expected_summary["unique_incident_ids"] == 6
-    assert expected_summary["canonical_incident_count"] == 6
-    assert expected_summary["service_count"] == 3
-    assert expected_summary["severity_counts"] == {"critical": 2, "major": 2, "minor": 2}
-    assert expected_summary["total_unplanned_downtime_ms"] == 1590
-    assert expected_summary["total_maintenance_overlap_ms"] == 240
-    assert expected_summary["total_billable_downtime_ms"] == 1350
-    assert expected_summary["queued_window_count"] == 3
-    assert expected_summary["planned_excluded_count"] == 1
-    assert [row["window_id"] for row in expected_queue] == [
-        "search:400-920",
-        "billing:120-700",
-        "auth:10-500",
-    ]
 
 
 def test_pipeline_supports_custom_output_dir():
@@ -544,9 +618,6 @@ def test_pipeline_supports_custom_output_dir():
         out.mkdir(parents=True, exist_ok=True)
         result = _run_pipeline(output_dir=out)
         assert result.returncode == 0, result.stderr
-        assert (out / "downtime_summary.json").exists()
-        assert (out / "service_windows.json").exists()
-        assert (out / "incident_queue.jsonl").exists()
         actual_files = {path.name for path in out.iterdir() if path.is_file()}
         assert actual_files == {"downtime_summary.json", "service_windows.json", "incident_queue.jsonl"}
 
@@ -572,7 +643,7 @@ def test_cli_defaults_work_and_match_explicit_run():
 
         assert _load_json(SUMMARY_PATH) == _load_json(explicit_out / "downtime_summary.json")
         assert _load_json(WINDOWS_PATH) == _load_json(explicit_out / "service_windows.json")
-        assert _queue_rows(QUEUE_PATH) == _queue_rows(explicit_out / "incident_queue.jsonl")
+        assert _load_jsonl(QUEUE_PATH) == _load_jsonl(explicit_out / "incident_queue.jsonl")
 
 
 def test_maintenance_source_path_affects_output():
@@ -585,106 +656,130 @@ def test_maintenance_source_path_affects_output():
             result = _run_pipeline(input_path=INPUT_PATH, output_dir=out)
             assert result.returncode == 0, result.stderr
             summary = _load_json(out / "downtime_summary.json")
-            # If maintenance file is read from the required path, overlap becomes zero.
             assert summary["total_maintenance_overlap_ms"] == 0
             assert summary["total_billable_downtime_ms"] == summary["total_unplanned_downtime_ms"]
     finally:
         MAINTENANCE_PATH.write_text(original)
 
 
-def test_severity_strip_lower_normalization_is_exercised():
-    synthetic_rows = [
-        {
-            "incident_id": "n1",
-            "service": "Auth ",
-            "start_ms": 100,
-            "end_ms": 300,
-            "severity": " CRITICAL ",
-            "planned": False,
-        },
-        {
-            "incident_id": "n2",
-            "service": "auth",
-            "start_ms": 250,
-            "end_ms": 500,
-            "severity": " major ",
-            "planned": False,
-        },
-        {
-            "incident_id": "n3",
-            "service": "Billing",
-            "start_ms": 10,
-            "end_ms": 60,
-            "severity": " MiNoR ",
-            "planned": False,
-        },
-        {
-            "incident_id": "n4",
-            "service": "billing ",
-            "start_ms": 60,
-            "end_ms": 120,
-            "severity": " MAJOR ",
-            "planned": False,
-        },
-        {
-            "incident_id": "n5",
-            "service": "auth",
-            "start_ms": 700,
-            "end_ms": 760,
-            "severity": " minor ",
-            "planned": "yes",
-        },
+def test_alias_normalization_and_unknown_severity_defaults_to_minor():
+    rows = [
+        {"incident_id": "n1", "service": " Authentication ", "start_ms": 10, "end_ms": 80, "severity": " MAJOR ", "planned": False},
+        {"incident_id": "n2", "service": "payments", "start_ms": 90, "end_ms": 200, "severity": "weird", "planned": False},
+        {"incident_id": "n3", "service": "search-api", "start_ms": 210, "end_ms": 280, "severity": "critical", "planned": False},
     ]
-
-    with tempfile.TemporaryDirectory() as tmp:
-        input_path = Path(tmp) / "norm_case.json"
-        out_dir = Path(tmp) / "out"
-        input_path.write_text(json.dumps(synthetic_rows))
-        out_dir.mkdir(parents=True, exist_ok=True)
-        result = _run_pipeline(input_path=input_path, output_dir=out_dir)
-        assert result.returncode == 0, result.stderr
-
-        summary = _load_json(out_dir / "downtime_summary.json")
-        windows = _load_json(out_dir / "service_windows.json")
-        queue_rows = _queue_rows(out_dir / "incident_queue.jsonl")
-
-        # Normalization must collapse service/severity variants and preserve severity ranking.
-        assert summary["severity_counts"] == {"critical": 1, "major": 2, "minor": 2}
-        assert summary["planned_excluded_count"] == 1
-        assert list(windows.keys()) == ["auth", "billing"]
-        assert windows["auth"][0]["max_severity"] == "critical"
-        assert windows["billing"][0]["max_severity"] == "major"
-        assert [row["service"] for row in queue_rows] == ["auth"]
+    canonical = _canonicalize(rows)
+    assert [row["service"] for row in canonical] == ["auth", "billing", "search"]
+    assert canonical[1]["severity"] == "minor"
 
 
-def test_planned_string_coercion_variants_are_exercised():
-    synthetic_rows = [
-        {"incident_id": "p1", "service": "X", "start_ms": 0, "end_ms": 200, "severity": "critical", "planned": "yes"},
-        {"incident_id": "p2", "service": "x", "start_ms": 200, "end_ms": 400, "severity": "major", "planned": "1"},
-        {"incident_id": "p3", "service": "x", "start_ms": 400, "end_ms": 600, "severity": "minor", "planned": "TRUE"},
-        {"incident_id": "p4", "service": "Y", "start_ms": 0, "end_ms": 300, "severity": "major", "planned": "no"},
-        {"incident_id": "p5", "service": "y", "start_ms": 300, "end_ms": 700, "severity": "major", "planned": "0"},
-        {"incident_id": "p6", "service": "y", "start_ms": 700, "end_ms": 900, "severity": "critical", "planned": "random"},
-        {"incident_id": "p7", "service": "y", "start_ms": 900, "end_ms": 1000, "severity": "minor", "planned": ""},
+def test_ms_coercion_and_end_floor_normalization():
+    rows = [
+        {"incident_id": "m1", "service": "auth", "start_ms": " 200 ", "end_ms": "100", "severity": "major", "planned": False},
+        {"incident_id": "m2", "service": "auth", "start_ms": "bad", "end_ms": " bad ", "severity": "minor", "planned": False},
     ]
+    canonical = _canonicalize(rows)
+    by_id = {row["incident_id"]: row for row in canonical}
+    assert by_id["m1"]["start_ms"] == 200
+    assert by_id["m1"]["end_ms"] == 200
+    assert by_id["m2"]["start_ms"] == 0
+    assert by_id["m2"]["end_ms"] == 0
 
-    with tempfile.TemporaryDirectory() as tmp:
-        input_path = Path(tmp) / "planned_variants.json"
-        out_dir = Path(tmp) / "out"
-        input_path.write_text(json.dumps(synthetic_rows))
-        out_dir.mkdir(parents=True, exist_ok=True)
-        result = _run_pipeline(input_path=input_path, output_dir=out_dir)
-        assert result.returncode == 0, result.stderr
 
-        summary = _load_json(out_dir / "downtime_summary.json")
-        windows = _load_json(out_dir / "service_windows.json")
-        queue_rows = _queue_rows(out_dir / "incident_queue.jsonl")
+def test_dedupe_tie_break_chain():
+    rows = [
+        {"incident_id": "d1", "service": "auth", "start_ms": 10, "end_ms": 200, "severity": "major", "planned": True},
+        {"incident_id": "d1", "service": "auth", "start_ms": 20, "end_ms": 200, "severity": "major", "planned": False},
+        {"incident_id": "d1", "service": "billing", "start_ms": 30, "end_ms": 200, "severity": "major", "planned": False},
+        {"incident_id": "d1", "service": "auth", "start_ms": 30, "end_ms": 200, "severity": "critical", "planned": False},
+    ]
+    canonical = _canonicalize(rows)
+    assert len(canonical) == 1
+    assert canonical[0]["severity"] == "critical"
+    assert canonical[0]["planned"] is False
+    assert canonical[0]["start_ms"] == 30
+    assert canonical[0]["service"] == "auth"
 
-        # yes/1/true-like strings are treated as planned=true; other strings are false.
-        assert summary["planned_excluded_count"] == 3
-        assert summary["severity_counts"] == {"critical": 2, "major": 3, "minor": 2}
-        assert list(windows.keys()) == ["y"]
-        assert windows["y"][0]["incident_count"] == 4
-        assert windows["y"][0]["max_severity"] == "critical"
-        assert len(queue_rows) == 1
-        assert queue_rows[0]["service"] == "y"
+
+def test_stitch_gap_30_merge_and_window_signature():
+    rows = [
+        {"incident_id": "g1", "service": "auth", "start_ms": 100, "end_ms": 200, "severity": "major", "planned": False},
+        {"incident_id": "g2", "service": "auth", "start_ms": 230, "end_ms": 260, "severity": "critical", "planned": False},
+    ]
+    maintenance = []
+    windows, _ = _merge_unplanned(_canonicalize(rows), maintenance)
+    assert len(windows["auth"]) == 1
+    block = windows["auth"][0]
+    assert block["start_ms"] == 100
+    assert block["end_ms"] == 260
+    assert block["incident_count"] == 2
+    assert block["critical_incident_count"] == 1
+    assert len(block["window_signature"]) == 10
+
+
+def test_queue_priority_uses_critical_incident_count_override():
+    windows = {
+        "auth": [
+            {
+                "start_ms": 10,
+                "end_ms": 300,
+                "duration_ms": 290,
+                "maintenance_overlap_ms": 90,
+                "billable_duration_ms": 200,
+                "incident_count": 3,
+                "critical_incident_count": 2,
+                "source_incident_ids": ["a", "b", "c"],
+                "max_severity": "major",
+                "window_signature": "1234567890",
+            }
+        ]
+    }
+    queue = _queue_from_windows(windows)
+    assert len(queue) == 0  # below inclusion threshold still excluded
+
+    windows["auth"][0]["billable_duration_ms"] = 220
+    queue = _queue_from_windows(windows)
+    assert len(queue) == 1
+    assert queue[0]["priority"] == "critical"
+
+
+def test_queue_signature_includes_window_signature():
+    windows = {
+        "auth": [
+            {
+                "start_ms": 10,
+                "end_ms": 400,
+                "duration_ms": 390,
+                "maintenance_overlap_ms": 0,
+                "billable_duration_ms": 390,
+                "incident_count": 2,
+                "critical_incident_count": 1,
+                "source_incident_ids": ["x1", "x2"],
+                "max_severity": "critical",
+                "window_signature": "aaaaaaaaaa",
+            }
+        ]
+    }
+    queue_a = _queue_from_windows(windows)
+    windows["auth"][0]["window_signature"] = "bbbbbbbbbb"
+    queue_b = _queue_from_windows(windows)
+    assert queue_a[0]["outage_signature"] != queue_b[0]["outage_signature"]
+
+
+def test_summary_checksum_fields_are_consistent(summary: dict, queue_rows: list[dict]):
+    expected_queue_checksum = hashlib.sha256(
+        "|".join(row["outage_signature"] for row in queue_rows).encode("utf-8")
+    ).hexdigest()
+    assert summary["queue_signature_checksum"] == expected_queue_checksum
+
+    canonical = _canonicalize(_load_json(INPUT_PATH))
+    expected_input_checksum = hashlib.sha256(
+        "\n".join(
+            (
+                f"{row['incident_id']}|{row['service']}|{row['start_ms']}|{row['end_ms']}|"
+                f"{row['severity']}|{1 if row['planned'] else 0}"
+            )
+            for row in canonical
+        ).encode("utf-8")
+    ).hexdigest()
+    assert summary["canonical_input_checksum"] == expected_input_checksum

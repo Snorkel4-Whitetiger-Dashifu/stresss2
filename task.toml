@@ -10,8 +10,8 @@ number_of_milestones = 0
 codebase_size = "minimal"
 languages = ["python"]
 tags = ["sre", "system-administration", "incident-response", "on-call-routing", "cli-repair"]
-expert_time_estimate_min = 180
-junior_time_estimate_min = 420
+expert_time_estimate_min = 240
+junior_time_estimate_min = 540
 
 [verifier]
 timeout_sec = 300.0
