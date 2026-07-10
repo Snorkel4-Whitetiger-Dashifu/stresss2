@@ -1,0 +1,9 @@
+[
+  {"incident_id": "x1", "service": "auth", "start_ms": 10, "end_ms": 200, "severity": "minor", "planned": false},
+  {"incident_id": "x2", "service": "Auth", "start_ms": 190, "end_ms": 500, "severity": "major", "planned": false},
+  {"incident_id": "x3", "service": "billing", "start_ms": 50, "end_ms": 100, "severity": "critical", "planned": true},
+  {"incident_id": "x4", "service": "billing", "start_ms": 120, "end_ms": 620, "severity": "major", "planned": false},
+  {"incident_id": "x4", "service": "Billing", "start_ms": 120, "end_ms": 700, "severity": "major", "planned": false},
+  {"incident_id": "x5", "service": "search", "start_ms": 400, "end_ms": 900, "severity": "critical", "planned": false},
+  {"incident_id": "x6", "service": "Search", "start_ms": 900, "end_ms": 920, "severity": "minor", "planned": false}
+]
