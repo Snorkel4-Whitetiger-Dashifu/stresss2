@@ -42,7 +42,7 @@ Required behavior:
    - `queued_window_count`
    - `planned_excluded_count`
 7. `service_windows.json` must be a flat map: `{service: [window, ...]}` with services sorted alphabetically and windows sorted by `start_ms`.
-8. Preserve `/app/workflow/.compile_outages.original` unchanged. The repair must modify only `/app/workflow/compile_outages.py`.
+8. Preserve `/app/workflow/.compile_outages.original` unchanged.
 9. Output directory contract is strict: write exactly the three files listed above (no extras).
 
 Do not hardcode outputs. Compute everything from the provided input data.
