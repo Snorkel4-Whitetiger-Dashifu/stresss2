@@ -1,0 +1,13 @@
+[
+  {"service": "auth", "start_ms": 150, "end_ms": 220},
+  {"service": "auth", "start_ms": 700, "end_ms": 780},
+  {"service": "auth", "start_ms": 1200, "end_ms": 1220},
+
+  {"service": "billing", "start_ms": 300, "end_ms": 360},
+  {"service": "billing", "start_ms": 910, "end_ms": 950},
+
+  {"service": "search", "start_ms": 50, "end_ms": 120},
+  {"service": "search", "start_ms": 390, "end_ms": 450},
+  {"service": "search", "start_ms": 700, "end_ms": 760},
+  {"service": "search", "start_ms": 1000, "end_ms": 1100}
+]

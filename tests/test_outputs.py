@@ -5,10 +5,10 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+from pathlib import Path
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -19,9 +19,11 @@ QUEUE_PATH = OUTPUT_DIR / "incident_queue.jsonl"
 PIPELINE = Path("/app/workflow/compile_outages.py")
 ORIGINAL_PIPELINE = Path("/app/workflow/.compile_outages.original")
 INPUT_PATH = Path("/app/data/outages.json")
+MAINTENANCE_PATH = Path("/app/data/maintenance_windows.json")
+ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 FIXTURE_PATH = Path("/tests/fixtures/expected_outputs.json")
 FIXTURE = json.loads(FIXTURE_PATH.read_text())
-ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
+
 PRIORITY_ORDER = ("critical", "high", "medium")
 SEVERITY_RANK = {"minor": 1, "major": 2, "critical": 3}
 
@@ -46,8 +48,16 @@ def _run_pipeline(
     )
 
 
-def _load_input(path: Path) -> list[dict]:
+def _load_json(path: Path):
     return json.loads(path.read_text())
+
+
+def _normalize_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes"}
+    return bool(value)
 
 
 def _executable_text(src: str) -> str:
@@ -84,14 +94,31 @@ def _canonicalize(rows: list[dict]) -> list[dict]:
         normalized = dict(row)
         normalized["service"] = str(normalized.get("service", "")).strip().lower()
         normalized["severity"] = str(normalized.get("severity", "")).strip().lower()
-        normalized["planned"] = bool(normalized.get("planned", False))
+        normalized["planned"] = _normalize_bool(normalized.get("planned", False))
         current = deduped.get(incident_id)
         if current is None or normalized["end_ms"] > current["end_ms"]:
             deduped[incident_id] = normalized
-    return sorted(deduped.values(), key=lambda row: (row["service"], row["start_ms"], row["incident_id"]))
+    return sorted(
+        deduped.values(),
+        key=lambda row: (row["service"], row["start_ms"], str(row["incident_id"])),
+    )
 
 
-def _merge_unplanned(canonical_rows: list[dict]) -> tuple[dict[str, list[dict]], int]:
+def _maintenance_by_service(rows: list[dict]) -> dict[str, list[tuple[int, int]]]:
+    out: dict[str, list[tuple[int, int]]] = {}
+    for row in rows:
+        service = str(row.get("service", "")).strip().lower()
+        out.setdefault(service, []).append((int(row["start_ms"]), int(row["end_ms"])))
+    return out
+
+
+def _overlap_ms(start_a: int, end_a: int, start_b: int, end_b: int) -> int:
+    return max(0, min(end_a, end_b) - max(start_a, start_b))
+
+
+def _merge_unplanned(
+    canonical_rows: list[dict], maintenance_rows: list[dict]
+) -> tuple[dict[str, list[dict]], int]:
     by_service: dict[str, list[dict]] = {}
     planned_excluded_count = 0
     for row in canonical_rows:
@@ -100,6 +127,7 @@ def _merge_unplanned(canonical_rows: list[dict]) -> tuple[dict[str, list[dict]],
             continue
         by_service.setdefault(row["service"], []).append(row)
 
+    maintenance = _maintenance_by_service(maintenance_rows)
     windows: dict[str, list[dict]] = {}
     for service in sorted(by_service):
         rows = sorted(by_service[service], key=lambda row: row["start_ms"])
@@ -111,6 +139,7 @@ def _merge_unplanned(canonical_rows: list[dict]) -> tuple[dict[str, list[dict]],
                         "start_ms": row["start_ms"],
                         "end_ms": row["end_ms"],
                         "incident_count": 1,
+                        "source_incident_ids": [str(row["incident_id"])],
                         "max_severity": row["severity"],
                     }
                 )
@@ -119,6 +148,9 @@ def _merge_unplanned(canonical_rows: list[dict]) -> tuple[dict[str, list[dict]],
             if row["start_ms"] <= prev["end_ms"]:
                 prev["end_ms"] = max(prev["end_ms"], row["end_ms"])
                 prev["incident_count"] += 1
+                event_id = str(row["incident_id"])
+                if event_id not in prev["source_incident_ids"]:
+                    prev["source_incident_ids"].append(event_id)
                 if SEVERITY_RANK[row["severity"]] > SEVERITY_RANK[prev["max_severity"]]:
                     prev["max_severity"] = row["severity"]
             else:
@@ -127,12 +159,19 @@ def _merge_unplanned(canonical_rows: list[dict]) -> tuple[dict[str, list[dict]],
                         "start_ms": row["start_ms"],
                         "end_ms": row["end_ms"],
                         "incident_count": 1,
+                        "source_incident_ids": [str(row["incident_id"])],
                         "max_severity": row["severity"],
                     }
                 )
 
         for block in merged:
+            block["source_incident_ids"] = sorted(block["source_incident_ids"])
             block["duration_ms"] = block["end_ms"] - block["start_ms"]
+            overlap = 0
+            for start, end in maintenance.get(service, []):
+                overlap += _overlap_ms(block["start_ms"], block["end_ms"], start, end)
+            block["maintenance_overlap_ms"] = overlap
+            block["billable_duration_ms"] = max(block["duration_ms"] - overlap, 0)
         windows[service] = merged
 
     return windows, planned_excluded_count
@@ -142,14 +181,27 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
     rows: list[dict] = []
     for service, blocks in windows.items():
         for block in blocks:
-            if block["duration_ms"] < 250:
+            if block["billable_duration_ms"] < 250:
                 continue
-            if block["max_severity"] == "critical" or block["duration_ms"] >= 700:
+
+            if (
+                block["max_severity"] == "critical"
+                and block["billable_duration_ms"] >= 300
+            ) or block["billable_duration_ms"] >= 700:
                 priority = "critical"
-            elif block["duration_ms"] >= 400:
+            elif block["billable_duration_ms"] >= 350 or (
+                block["incident_count"] >= 3
+                and block["max_severity"] in {"major", "critical"}
+            ):
                 priority = "high"
             else:
                 priority = "medium"
+
+            ids_csv = ",".join(block["source_incident_ids"])
+            signature = hashlib.sha1(
+                f"{service}|{block['start_ms']}|{block['end_ms']}|{ids_csv}".encode("utf-8")
+            ).hexdigest()[:12]
+
             rows.append(
                 {
                     "window_id": f"{service}:{block['start_ms']}-{block['end_ms']}",
@@ -157,17 +209,22 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
                     "start_ms": block["start_ms"],
                     "end_ms": block["end_ms"],
                     "duration_ms": block["duration_ms"],
+                    "maintenance_overlap_ms": block["maintenance_overlap_ms"],
+                    "billable_duration_ms": block["billable_duration_ms"],
                     "incident_count": block["incident_count"],
+                    "source_incident_ids": block["source_incident_ids"],
                     "max_severity": block["max_severity"],
                     "priority": priority,
+                    "outage_signature": signature,
                 }
             )
 
-    priority_rank = {name: idx for idx, name in enumerate(PRIORITY_ORDER)}
+    rank = {name: idx for idx, name in enumerate(PRIORITY_ORDER)}
     rows.sort(
         key=lambda row: (
-            priority_rank[row["priority"]],
-            -row["duration_ms"],
+            rank[row["priority"]],
+            -row["billable_duration_ms"],
+            -row["incident_count"],
             row["service"],
             row["start_ms"],
         )
@@ -175,13 +232,32 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
     return rows
 
 
-def _build_summary(raw_rows: list[dict], canonical_rows: list[dict], windows: dict[str, list[dict]], queue: list[dict], planned_excluded_count: int) -> dict:
+def _build_summary(
+    raw_rows: list[dict],
+    canonical_rows: list[dict],
+    windows: dict[str, list[dict]],
+    queue: list[dict],
+    planned_excluded_count: int,
+) -> dict:
     severity_counts = {"critical": 0, "major": 0, "minor": 0}
     for row in canonical_rows:
         if row["severity"] in severity_counts:
             severity_counts[row["severity"]] += 1
 
     total_unplanned = sum(block["duration_ms"] for blocks in windows.values() for block in blocks)
+    total_maintenance = sum(
+        block["maintenance_overlap_ms"] for blocks in windows.values() for block in blocks
+    )
+    total_billable = sum(
+        block["billable_duration_ms"] for blocks in windows.values() for block in blocks
+    )
+    longest_window = max(
+        (block["duration_ms"] for blocks in windows.values() for block in blocks), default=0
+    )
+    checksum = hashlib.sha256(
+        "|".join(row["outage_signature"] for row in queue).encode("utf-8")
+    ).hexdigest()
+
     return {
         "schema_version": "outage-windows-v1",
         "raw_incident_count": len(raw_rows),
@@ -190,15 +266,20 @@ def _build_summary(raw_rows: list[dict], canonical_rows: list[dict], windows: di
         "service_count": len(windows),
         "severity_counts": severity_counts,
         "total_unplanned_downtime_ms": total_unplanned,
+        "total_maintenance_overlap_ms": total_maintenance,
+        "total_billable_downtime_ms": total_billable,
+        "longest_window_ms": longest_window,
         "queued_window_count": len(queue),
         "planned_excluded_count": planned_excluded_count,
+        "queue_signature_checksum": checksum,
     }
 
 
 def _expected_from_input(path: Path) -> tuple[dict, dict[str, list[dict]], list[dict]]:
-    raw_rows = _load_input(path)
+    raw_rows = _load_json(path)
+    maintenance_rows = _load_json(MAINTENANCE_PATH)
     canonical_rows = _canonicalize(raw_rows)
-    windows, planned_count = _merge_unplanned(canonical_rows)
+    windows, planned_count = _merge_unplanned(canonical_rows, maintenance_rows)
     queue = _queue_from_windows(windows)
     summary = _build_summary(raw_rows, canonical_rows, windows, queue, planned_count)
     return summary, windows, queue
@@ -223,12 +304,12 @@ def _prepare_outputs():
 
 @pytest.fixture(scope="session")
 def summary() -> dict:
-    return json.loads(SUMMARY_PATH.read_text())
+    return _load_json(SUMMARY_PATH)
 
 
 @pytest.fixture(scope="session")
 def windows() -> dict[str, list[dict]]:
-    return json.loads(WINDOWS_PATH.read_text())
+    return _load_json(WINDOWS_PATH)
 
 
 @pytest.fixture(scope="session")
@@ -260,12 +341,17 @@ def test_summary_schema(summary: dict):
         "service_count",
         "severity_counts",
         "total_unplanned_downtime_ms",
+        "total_maintenance_overlap_ms",
+        "total_billable_downtime_ms",
+        "longest_window_ms",
         "queued_window_count",
         "planned_excluded_count",
+        "queue_signature_checksum",
     ):
         assert key in summary
     assert summary["schema_version"] == "outage-windows-v1"
     assert list(summary["severity_counts"].keys()) == ["critical", "major", "minor"]
+    assert len(summary["queue_signature_checksum"]) == 64
 
 
 def test_summary_matches_expected_computation(summary: dict):
@@ -273,17 +359,7 @@ def test_summary_matches_expected_computation(summary: dict):
     assert summary == expected_summary
 
 
-def test_summary_computed_from_input(summary: dict):
-    expected_summary, _, _ = _expected_from_input(INPUT_PATH)
-    assert summary == expected_summary
-
-
 def test_service_windows_match_expected_computation(windows: dict[str, list[dict]]):
-    _, expected_windows, _ = _expected_from_input(INPUT_PATH)
-    assert windows == expected_windows
-
-
-def test_service_windows_computed_from_input(windows: dict[str, list[dict]]):
     _, expected_windows, _ = _expected_from_input(INPUT_PATH)
     assert windows == expected_windows
 
@@ -299,24 +375,36 @@ def test_queue_computed_from_input(queue_rows: list[dict]):
 
 
 def test_queue_required_fields(queue_rows: list[dict]):
+    expected_keys = {
+        "window_id",
+        "service",
+        "start_ms",
+        "end_ms",
+        "duration_ms",
+        "maintenance_overlap_ms",
+        "billable_duration_ms",
+        "incident_count",
+        "source_incident_ids",
+        "max_severity",
+        "priority",
+        "outage_signature",
+    }
     for row in queue_rows:
-        assert set(row.keys()) == {
-            "window_id",
-            "service",
-            "start_ms",
-            "end_ms",
-            "duration_ms",
-            "incident_count",
-            "max_severity",
-            "priority",
-        }
+        assert set(row.keys()) == expected_keys
+        assert isinstance(row["source_incident_ids"], list)
+        assert row["source_incident_ids"] == sorted(row["source_incident_ids"])
+        assert len(row["outage_signature"]) == 12
 
 
-def test_queue_priorities(queue_rows: list[dict]):
+def test_priority_rules(queue_rows: list[dict]):
     for row in queue_rows:
-        if row["max_severity"] == "critical" or row["duration_ms"] >= 700:
+        if (row["max_severity"] == "critical" and row["billable_duration_ms"] >= 300) or row[
+            "billable_duration_ms"
+        ] >= 700:
             assert row["priority"] == "critical"
-        elif row["duration_ms"] >= 400:
+        elif row["billable_duration_ms"] >= 350 or (
+            row["incident_count"] >= 3 and row["max_severity"] in {"major", "critical"}
+        ):
             assert row["priority"] == "high"
         else:
             assert row["priority"] == "medium"
@@ -325,7 +413,13 @@ def test_queue_priorities(queue_rows: list[dict]):
 def test_queue_sorted(queue_rows: list[dict]):
     rank = {name: idx for idx, name in enumerate(PRIORITY_ORDER)}
     actual = [
-        (rank[row["priority"]], -row["duration_ms"], row["service"], row["start_ms"])
+        (
+            rank[row["priority"]],
+            -row["billable_duration_ms"],
+            -row["incident_count"],
+            row["service"],
+            row["start_ms"],
+        )
         for row in queue_rows
     ]
     assert actual == sorted(actual)
@@ -340,11 +434,39 @@ def test_jsonl_compact_format():
         assert json.dumps(parsed, separators=(",", ":")) == line
 
 
-def test_windows_are_sorted(windows: dict[str, list[dict]]):
+def test_windows_are_sorted_and_have_extra_fields(windows: dict[str, list[dict]]):
     assert list(windows.keys()) == sorted(windows.keys())
     for blocks in windows.values():
         starts = [block["start_ms"] for block in blocks]
         assert starts == sorted(starts)
+        for block in blocks:
+            assert set(block.keys()) == {
+                "start_ms",
+                "end_ms",
+                "duration_ms",
+                "maintenance_overlap_ms",
+                "billable_duration_ms",
+                "incident_count",
+                "source_incident_ids",
+                "max_severity",
+            }
+
+
+def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dict]]):
+    total_duration = sum(block["duration_ms"] for blocks in windows.values() for block in blocks)
+    total_overlap = sum(
+        block["maintenance_overlap_ms"] for blocks in windows.values() for block in blocks
+    )
+    total_billable = sum(
+        block["billable_duration_ms"] for blocks in windows.values() for block in blocks
+    )
+    assert summary["total_unplanned_downtime_ms"] == total_duration
+    assert summary["total_maintenance_overlap_ms"] == total_overlap
+    assert summary["total_billable_downtime_ms"] == total_billable
+    assert total_billable <= total_duration
+    assert summary["longest_window_ms"] == max(
+        (block["duration_ms"] for blocks in windows.values() for block in blocks), default=0
+    )
 
 
 def test_original_snapshot_preserved():
@@ -378,35 +500,35 @@ def test_pipeline_rerun_idempotent(summary: dict, queue_rows: list[dict]):
         rerun_dir.mkdir(parents=True, exist_ok=True)
         result = _run_pipeline(output_dir=rerun_dir)
         assert result.returncode == 0, result.stderr
-        rerun_summary = json.loads((rerun_dir / "downtime_summary.json").read_text())
+        rerun_summary = _load_json(rerun_dir / "downtime_summary.json")
         rerun_queue = _queue_rows(rerun_dir / "incident_queue.jsonl")
         assert rerun_summary == summary
         assert rerun_queue == queue_rows
 
 
 def test_pipeline_supports_alternate_input():
-    alt_path = ALT_INPUT_PATH
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "alt"
         out.mkdir(parents=True, exist_ok=True)
-        result = _run_pipeline(input_path=alt_path, output_dir=out)
+        result = _run_pipeline(input_path=ALT_INPUT_PATH, output_dir=out)
         assert result.returncode == 0, result.stderr
-        summary = json.loads((out / "downtime_summary.json").read_text())
+        summary = _load_json(out / "downtime_summary.json")
         queue_rows = _queue_rows(out / "incident_queue.jsonl")
-        expected_summary, _, expected_queue = _expected_from_input(alt_path)
+        expected_summary, _, expected_queue = _expected_from_input(ALT_INPUT_PATH)
         assert summary == expected_summary
         assert queue_rows == expected_queue
 
 
 def test_alternate_input_expected_values():
-    alt_path = ALT_INPUT_PATH
-    expected_summary, _, expected_queue = _expected_from_input(alt_path)
+    expected_summary, _, expected_queue = _expected_from_input(ALT_INPUT_PATH)
     assert expected_summary["raw_incident_count"] == 7
     assert expected_summary["unique_incident_ids"] == 6
     assert expected_summary["canonical_incident_count"] == 6
     assert expected_summary["service_count"] == 3
     assert expected_summary["severity_counts"] == {"critical": 2, "major": 2, "minor": 2}
     assert expected_summary["total_unplanned_downtime_ms"] == 1590
+    assert expected_summary["total_maintenance_overlap_ms"] == 240
+    assert expected_summary["total_billable_downtime_ms"] == 1350
     assert expected_summary["queued_window_count"] == 3
     assert expected_summary["planned_excluded_count"] == 1
     assert [row["window_id"] for row in expected_queue] == [

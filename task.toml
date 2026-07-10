@@ -10,8 +10,8 @@ number_of_milestones = 0
 codebase_size = "minimal"
 languages = ["python"]
 tags = ["interval-merging", "outage-analysis", "jsonl", "cli", "debugging"]
-expert_time_estimate_min = 120
-junior_time_estimate_min = 300
+expert_time_estimate_min = 180
+junior_time_estimate_min = 420
 
 [verifier]
 timeout_sec = 300.0
