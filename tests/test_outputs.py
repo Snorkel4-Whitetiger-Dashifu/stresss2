@@ -590,3 +590,101 @@ def test_maintenance_source_path_affects_output():
             assert summary["total_billable_downtime_ms"] == summary["total_unplanned_downtime_ms"]
     finally:
         MAINTENANCE_PATH.write_text(original)
+
+
+def test_severity_strip_lower_normalization_is_exercised():
+    synthetic_rows = [
+        {
+            "incident_id": "n1",
+            "service": "Auth ",
+            "start_ms": 100,
+            "end_ms": 300,
+            "severity": " CRITICAL ",
+            "planned": False,
+        },
+        {
+            "incident_id": "n2",
+            "service": "auth",
+            "start_ms": 250,
+            "end_ms": 500,
+            "severity": " major ",
+            "planned": False,
+        },
+        {
+            "incident_id": "n3",
+            "service": "Billing",
+            "start_ms": 10,
+            "end_ms": 60,
+            "severity": " MiNoR ",
+            "planned": False,
+        },
+        {
+            "incident_id": "n4",
+            "service": "billing ",
+            "start_ms": 60,
+            "end_ms": 120,
+            "severity": " MAJOR ",
+            "planned": False,
+        },
+        {
+            "incident_id": "n5",
+            "service": "auth",
+            "start_ms": 700,
+            "end_ms": 760,
+            "severity": " minor ",
+            "planned": "yes",
+        },
+    ]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        input_path = Path(tmp) / "norm_case.json"
+        out_dir = Path(tmp) / "out"
+        input_path.write_text(json.dumps(synthetic_rows))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        result = _run_pipeline(input_path=input_path, output_dir=out_dir)
+        assert result.returncode == 0, result.stderr
+
+        summary = _load_json(out_dir / "downtime_summary.json")
+        windows = _load_json(out_dir / "service_windows.json")
+        queue_rows = _queue_rows(out_dir / "incident_queue.jsonl")
+
+        # Normalization must collapse service/severity variants and preserve severity ranking.
+        assert summary["severity_counts"] == {"critical": 1, "major": 2, "minor": 2}
+        assert summary["planned_excluded_count"] == 1
+        assert list(windows.keys()) == ["auth", "billing"]
+        assert windows["auth"][0]["max_severity"] == "critical"
+        assert windows["billing"][0]["max_severity"] == "major"
+        assert [row["service"] for row in queue_rows] == ["auth"]
+
+
+def test_planned_string_coercion_variants_are_exercised():
+    synthetic_rows = [
+        {"incident_id": "p1", "service": "X", "start_ms": 0, "end_ms": 200, "severity": "critical", "planned": "yes"},
+        {"incident_id": "p2", "service": "x", "start_ms": 200, "end_ms": 400, "severity": "major", "planned": "1"},
+        {"incident_id": "p3", "service": "x", "start_ms": 400, "end_ms": 600, "severity": "minor", "planned": "TRUE"},
+        {"incident_id": "p4", "service": "Y", "start_ms": 0, "end_ms": 300, "severity": "major", "planned": "no"},
+        {"incident_id": "p5", "service": "y", "start_ms": 300, "end_ms": 700, "severity": "major", "planned": "0"},
+        {"incident_id": "p6", "service": "y", "start_ms": 700, "end_ms": 900, "severity": "critical", "planned": "random"},
+        {"incident_id": "p7", "service": "y", "start_ms": 900, "end_ms": 1000, "severity": "minor", "planned": ""},
+    ]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        input_path = Path(tmp) / "planned_variants.json"
+        out_dir = Path(tmp) / "out"
+        input_path.write_text(json.dumps(synthetic_rows))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        result = _run_pipeline(input_path=input_path, output_dir=out_dir)
+        assert result.returncode == 0, result.stderr
+
+        summary = _load_json(out_dir / "downtime_summary.json")
+        windows = _load_json(out_dir / "service_windows.json")
+        queue_rows = _queue_rows(out_dir / "incident_queue.jsonl")
+
+        # yes/1/true-like strings are treated as planned=true; other strings are false.
+        assert summary["planned_excluded_count"] == 3
+        assert summary["severity_counts"] == {"critical": 2, "major": 3, "minor": 2}
+        assert list(windows.keys()) == ["y"]
+        assert windows["y"][0]["incident_count"] == 4
+        assert windows["y"][0]["max_severity"] == "critical"
+        assert len(queue_rows) == 1
+        assert queue_rows[0]["service"] == "y"
