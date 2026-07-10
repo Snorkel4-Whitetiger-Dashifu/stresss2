@@ -9,7 +9,11 @@ Keep the CLI contract exactly as-is:
 The run must write exactly three files in the chosen output directory (no extras): `downtime_summary.json`, `service_windows.json`, and `incident_queue.jsonl`.
 
 Processing requirements:
-1. Canonicalize incidents by normalizing `service` and `severity` with `str(...).strip().lower()`, coercing `planned` (`"true"`, `"1"`, `"yes"` case-insensitive => `True`; booleans unchanged; otherwise Python truthiness), and deduplicating by `incident_id` keeping the row with greatest `end_ms`.
+1. Canonicalize incidents by normalizing `service` and `severity` with `str(...).strip().lower()`, coercing `planned` as follows, and deduplicating by `incident_id` keeping the row with greatest `end_ms`.
+   - if `planned` is a boolean, keep it unchanged
+   - if `planned` is a string, only `"true"`, `"1"`, or `"yes"` (case-insensitive) are `True`; all other strings are `False`
+   - for non-string, non-boolean values, use Python `bool(value)`
+   - examples: `"yes"` -> `True`, `"TRUE"` -> `True`, `"no"` -> `False`, `"0"` -> `False`, `"random"` -> `False`
 2. Build merged windows from unplanned incidents only (planned incidents still count in summary severity totals). Merge per normalized service and treat touching intervals as mergeable (`next.start_ms <= current.end_ms`).
 3. For each merged window compute `duration_ms`, `incident_count`, sorted `source_incident_ids`, and `max_severity` with rank `critical > major > minor`.
 4. Apply maintenance credit only from same-service maintenance windows using overlap `max(0, min(end_a, end_b) - max(start_a, start_b))`; set `maintenance_overlap_ms` to summed overlap and `billable_duration_ms` to `max(duration_ms - maintenance_overlap_ms, 0)`.
