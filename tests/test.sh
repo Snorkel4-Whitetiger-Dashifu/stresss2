@@ -7,6 +7,8 @@ if [ "$PWD" = "/" ]; then
     exit 1
 fi
 
+python3 -m pip install --no-index --find-links /tests/wheels -r /tests/requirements-test.txt
+
 set +e
 
 python3 -m pytest -o cache_dir=/tmp/pytest_cache \

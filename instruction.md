@@ -22,6 +22,9 @@ Required behavior:
    - `max_severity` using rank `critical > major > minor`
 5. Queue rules:
    - include merged windows with `duration_ms >= 250`
+   - each queue row must include exactly:
+     - `window_id` (format: `"{service}:{start_ms}-{end_ms}"`)
+     - `service`, `start_ms`, `end_ms`, `duration_ms`, `incident_count`, `max_severity`, `priority`
    - assign `priority`:
      - `critical` if `max_severity == "critical"` OR `duration_ms >= 700`
      - `high` if `duration_ms >= 400`
@@ -39,5 +42,7 @@ Required behavior:
    - `queued_window_count`
    - `planned_excluded_count`
 7. `service_windows.json` must be a flat map: `{service: [window, ...]}` with services sorted alphabetically and windows sorted by `start_ms`.
+8. Preserve `/app/workflow/.compile_outages.original` unchanged. The repair must modify only `/app/workflow/compile_outages.py`.
+9. Output directory contract is strict: write exactly the three files listed above (no extras).
 
 Do not hardcode outputs. Compute everything from the provided input data.

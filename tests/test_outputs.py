@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import shutil
@@ -20,6 +21,7 @@ ORIGINAL_PIPELINE = Path("/app/workflow/.compile_outages.original")
 INPUT_PATH = Path("/app/data/outages.json")
 FIXTURE_PATH = Path("/tests/fixtures/expected_outputs.json")
 FIXTURE = json.loads(FIXTURE_PATH.read_text())
+ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 PRIORITY_ORDER = ("critical", "high", "medium")
 SEVERITY_RANK = {"minor": 1, "major": 2, "critical": 3}
 
@@ -46,6 +48,33 @@ def _run_pipeline(
 
 def _load_input(path: Path) -> list[dict]:
     return json.loads(path.read_text())
+
+
+def _executable_text(src: str) -> str:
+    docstring_lines: set[int] = set()
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef)):
+            continue
+        if not node.body:
+            continue
+        first = node.body[0]
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+            if isinstance(first.value.value, str):
+                end = getattr(first, "end_lineno", first.lineno)
+                docstring_lines.update(range(first.lineno, end + 1))
+
+    lines: list[str] = []
+    for line_number, line in enumerate(src.splitlines(), start=1):
+        if line_number in docstring_lines:
+            continue
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if "#" in line:
+            line = line.split("#", 1)[0]
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _canonicalize(rows: list[dict]) -> list[dict]:
@@ -216,6 +245,12 @@ def test_outputs_exist():
         assert path.exists(), f"missing required output: {path}"
 
 
+def test_output_dir_contains_exactly_three_files():
+    expected_files = {"downtime_summary.json", "service_windows.json", "incident_queue.jsonl"}
+    actual_files = {path.name for path in OUTPUT_DIR.iterdir() if path.is_file()}
+    assert actual_files == expected_files
+
+
 def test_summary_schema(summary: dict):
     for key in (
         "schema_version",
@@ -233,19 +268,9 @@ def test_summary_schema(summary: dict):
     assert list(summary["severity_counts"].keys()) == ["critical", "major", "minor"]
 
 
-def test_summary_matches_fixture(summary: dict):
-    for key in (
-        "schema_version",
-        "raw_incident_count",
-        "unique_incident_ids",
-        "canonical_incident_count",
-        "service_count",
-        "severity_counts",
-        "total_unplanned_downtime_ms",
-        "queued_window_count",
-        "planned_excluded_count",
-    ):
-        assert summary[key] == FIXTURE[key]
+def test_summary_matches_expected_computation(summary: dict):
+    expected_summary, _, _ = _expected_from_input(INPUT_PATH)
+    assert summary == expected_summary
 
 
 def test_summary_computed_from_input(summary: dict):
@@ -253,8 +278,9 @@ def test_summary_computed_from_input(summary: dict):
     assert summary == expected_summary
 
 
-def test_service_windows_match_fixture(windows: dict[str, list[dict]]):
-    assert windows == FIXTURE["expected_service_windows"]
+def test_service_windows_match_expected_computation(windows: dict[str, list[dict]]):
+    _, expected_windows, _ = _expected_from_input(INPUT_PATH)
+    assert windows == expected_windows
 
 
 def test_service_windows_computed_from_input(windows: dict[str, list[dict]]):
@@ -262,8 +288,9 @@ def test_service_windows_computed_from_input(windows: dict[str, list[dict]]):
     assert windows == expected_windows
 
 
-def test_queue_window_ids_match_fixture(queue_rows: list[dict]):
-    assert [row["window_id"] for row in queue_rows] == FIXTURE["expected_queue_window_ids"]
+def test_queue_window_ids_match_expected_computation(queue_rows: list[dict]):
+    _, _, expected_queue = _expected_from_input(INPUT_PATH)
+    assert [row["window_id"] for row in queue_rows] == [row["window_id"] for row in expected_queue]
 
 
 def test_queue_computed_from_input(queue_rows: list[dict]):
@@ -326,6 +353,12 @@ def test_original_snapshot_preserved():
     assert digest == FIXTURE["broken_pipeline_sha256"]
 
 
+def test_pipeline_does_not_reference_test_artifacts():
+    code = _executable_text(PIPELINE.read_text())
+    for token in ("/tests", "test_outputs.py", "expected_outputs.json", "fixtures/"):
+        assert token not in code
+
+
 def test_broken_snapshot_is_wrong():
     with tempfile.TemporaryDirectory() as tmp:
         broken = Path(tmp) / "compile_outages.py"
@@ -334,8 +367,9 @@ def test_broken_snapshot_is_wrong():
         result = _run_pipeline(pipeline=broken, output_dir=out)
         assert result.returncode == 0, result.stderr
         queue = _queue_rows(out / "incident_queue.jsonl")
+        _, _, expected_queue = _expected_from_input(INPUT_PATH)
         assert len(queue) == FIXTURE["broken_queue_count"]
-        assert len(queue) != FIXTURE["queued_window_count"]
+        assert len(queue) != len(expected_queue)
 
 
 def test_pipeline_rerun_idempotent(summary: dict, queue_rows: list[dict]):
@@ -351,7 +385,7 @@ def test_pipeline_rerun_idempotent(summary: dict, queue_rows: list[dict]):
 
 
 def test_pipeline_supports_alternate_input():
-    alt_path = Path(FIXTURE["alternate_input"])
+    alt_path = ALT_INPUT_PATH
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "alt"
         out.mkdir(parents=True, exist_ok=True)
@@ -364,22 +398,22 @@ def test_pipeline_supports_alternate_input():
         assert queue_rows == expected_queue
 
 
-def test_alternate_fixture_values():
-    alt = FIXTURE["alternate_expected"]
-    alt_path = Path(FIXTURE["alternate_input"])
+def test_alternate_input_expected_values():
+    alt_path = ALT_INPUT_PATH
     expected_summary, _, expected_queue = _expected_from_input(alt_path)
-    for key in (
-        "raw_incident_count",
-        "unique_incident_ids",
-        "canonical_incident_count",
-        "service_count",
-        "severity_counts",
-        "total_unplanned_downtime_ms",
-        "queued_window_count",
-        "planned_excluded_count",
-    ):
-        assert expected_summary[key] == alt[key]
-    assert [row["window_id"] for row in expected_queue] == alt["queue_window_ids"]
+    assert expected_summary["raw_incident_count"] == 7
+    assert expected_summary["unique_incident_ids"] == 6
+    assert expected_summary["canonical_incident_count"] == 6
+    assert expected_summary["service_count"] == 3
+    assert expected_summary["severity_counts"] == {"critical": 2, "major": 2, "minor": 2}
+    assert expected_summary["total_unplanned_downtime_ms"] == 1590
+    assert expected_summary["queued_window_count"] == 3
+    assert expected_summary["planned_excluded_count"] == 1
+    assert [row["window_id"] for row in expected_queue] == [
+        "search:400-920",
+        "billing:120-700",
+        "auth:10-500",
+    ]
 
 
 def test_pipeline_supports_custom_output_dir():
@@ -391,3 +425,5 @@ def test_pipeline_supports_custom_output_dir():
         assert (out / "downtime_summary.json").exists()
         assert (out / "service_windows.json").exists()
         assert (out / "incident_queue.jsonl").exists()
+        actual_files = {path.name for path in out.iterdir() if path.is_file()}
+        assert actual_files == {"downtime_summary.json", "service_windows.json", "incident_queue.jsonl"}
