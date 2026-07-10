@@ -549,3 +549,44 @@ def test_pipeline_supports_custom_output_dir():
         assert (out / "incident_queue.jsonl").exists()
         actual_files = {path.name for path in out.iterdir() if path.is_file()}
         assert actual_files == {"downtime_summary.json", "service_windows.json", "incident_queue.jsonl"}
+
+
+def test_cli_defaults_work_and_match_explicit_run():
+    with tempfile.TemporaryDirectory() as tmp:
+        explicit_out = Path(tmp) / "explicit"
+        explicit_out.mkdir(parents=True, exist_ok=True)
+        explicit = _run_pipeline(input_path=INPUT_PATH, output_dir=explicit_out)
+        assert explicit.returncode == 0, explicit.stderr
+
+        if OUTPUT_DIR.exists():
+            shutil.rmtree(OUTPUT_DIR)
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+        implicit = subprocess.run(
+            ["python3", str(PIPELINE)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert implicit.returncode == 0, implicit.stderr
+
+        assert _load_json(SUMMARY_PATH) == _load_json(explicit_out / "downtime_summary.json")
+        assert _load_json(WINDOWS_PATH) == _load_json(explicit_out / "service_windows.json")
+        assert _queue_rows(QUEUE_PATH) == _queue_rows(explicit_out / "incident_queue.jsonl")
+
+
+def test_maintenance_source_path_affects_output():
+    original = MAINTENANCE_PATH.read_text()
+    try:
+        MAINTENANCE_PATH.write_text("[]\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "no_maintenance"
+            out.mkdir(parents=True, exist_ok=True)
+            result = _run_pipeline(input_path=INPUT_PATH, output_dir=out)
+            assert result.returncode == 0, result.stderr
+            summary = _load_json(out / "downtime_summary.json")
+            # If maintenance file is read from the required path, overlap becomes zero.
+            assert summary["total_maintenance_overlap_ms"] == 0
+            assert summary["total_billable_downtime_ms"] == summary["total_unplanned_downtime_ms"]
+    finally:
+        MAINTENANCE_PATH.write_text(original)
