@@ -12,7 +12,7 @@ The repaired compiler must emit exactly three files under the output dir:
 
 Required behavior:
 1. Canonicalize records:
-   - normalize `service` and `severity` to lowercase
+   - normalize `service` and `severity` with `strip().lower()`
    - dedupe by `incident_id`, keeping the record with the highest `end_ms`
 2. Planned incidents (`planned=true`) are excluded from merged windows and queue output, but still counted in `severity_counts`.
 3. Merge unplanned intervals per service when intervals overlap or touch (`next.start_ms <= current.end_ms`).
@@ -44,5 +44,6 @@ Required behavior:
 7. `service_windows.json` must be a flat map: `{service: [window, ...]}` with services sorted alphabetically and windows sorted by `start_ms`.
 8. Preserve `/app/workflow/.compile_outages.original` unchanged.
 9. Output directory contract is strict: write exactly the three files listed above (no extras).
+10. The repaired pipeline must not read/import verifier artifacts under `/tests` (for example fixtures or test helper modules).
 
 Do not hardcode outputs. Compute everything from the provided input data.
