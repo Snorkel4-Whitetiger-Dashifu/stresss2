@@ -50,7 +50,10 @@ Processing requirements:
 Queue behavior:
 - resolve policy per normalized service from `/app/data/response_policies.json`:
   - use `default` profile, then apply `service_overrides[service]` when present
-  - numeric policy fields are int-coerced; missing fields inherit from default
+  - numeric policy fields are int-coerced; missing override fields inherit from default
+  - the `default` profile is authoritative and must include:
+    `queue_min_effective_ms`, `critical_p1_min_ms`, `critical_threshold_ms`, `high_threshold_ms`, `no_overlap_high_duration_ms`, `critical_count_for_critical`, `no_overlap_bonus`, `segment_bonus`, `score_threshold_critical`, `score_threshold_high`, and `severity_weight`
+  - if `critical_p1_min_ms` is absent in a malformed policy file, treat it as `280` for robustness
   - severity weights are merged key-wise (`critical`, `major`, `minor`)
 - include windows when `billable_duration_ms >= policy.queue_min_effective_ms`
 - `window_id`: `"{service}:{start_ms}-{end_ms}"`

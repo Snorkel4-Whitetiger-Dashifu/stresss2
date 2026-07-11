@@ -1,6 +1,7 @@
 {
   "default": {
     "queue_min_effective_ms": 220,
+    "critical_p1_min_ms": 280,
     "critical_threshold_ms": 650,
     "high_threshold_ms": 320,
     "no_overlap_high_duration_ms": 450,
