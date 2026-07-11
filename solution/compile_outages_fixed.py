@@ -14,6 +14,7 @@ PRIORITY_ORDER = ("critical", "high", "medium")
 MAINTENANCE_PATH = Path("/app/data/maintenance_windows.json")
 POLICY_PATH = Path("/app/data/response_policies.json")
 EXCEPTIONS_PATH = Path("/app/data/routing_exceptions.json")
+HANDOFF_PATH = Path("/app/data/handoff_windows.json")
 SERVICE_ALIASES = {
     "authentication": "auth",
     "payments": "billing",
@@ -38,6 +39,10 @@ DEFAULT_POLICY = {
     "min_queue_floor_ms": 120,
     "boost_force_critical_ms": 140,
     "boost_high_relief_ms": 40,
+    "handoff_penalty_ms": 35,
+    "handoff_unit_ms": 60,
+    "handoff_force_critical_ms": 150,
+    "handoff_high_relief_ms": 50,
 }
 
 
@@ -54,6 +59,10 @@ def load_policies(path: Path = POLICY_PATH) -> dict:
 
 
 def load_exceptions(path: Path = EXCEPTIONS_PATH) -> list[dict]:
+    return json.loads(path.read_text())
+
+
+def load_handoffs(path: Path = HANDOFF_PATH) -> list[dict]:
     return json.loads(path.read_text())
 
 
@@ -82,6 +91,11 @@ def normalize_ms(value: object) -> int:
         return 0
 
 
+def normalize_handoff_scope(value: object) -> str:
+    scope = str(value if value is not None else "").strip().lower()
+    return scope if scope in {"all", "major", "critical"} else ""
+
+
 def _normalize_policy(raw_policy: dict | None) -> dict:
     raw_policy = raw_policy or {}
     normalized = dict(DEFAULT_POLICY)
@@ -103,6 +117,10 @@ def _normalize_policy(raw_policy: dict | None) -> dict:
         "min_queue_floor_ms",
         "boost_force_critical_ms",
         "boost_high_relief_ms",
+        "handoff_penalty_ms",
+        "handoff_unit_ms",
+        "handoff_force_critical_ms",
+        "handoff_high_relief_ms",
     ):
         if key in raw_policy:
             normalized[key] = normalize_ms(raw_policy.get(key))
@@ -143,7 +161,9 @@ def _policy_checksum(policy_data: dict) -> str:
         "{no_overlap_bonus}|{segment_bonus}|{score_threshold_critical}|"
         "{score_threshold_high}|{suppress_penalty_ms}|{boost_credit_ms}|"
         "{suppress_unit_ms}|{boost_unit_ms}|{min_queue_floor_ms}|"
-        "{boost_force_critical_ms}|{boost_high_relief_ms}|{critical}|{major}|{minor}".format(
+        "{boost_force_critical_ms}|{boost_high_relief_ms}|{handoff_penalty_ms}|"
+        "{handoff_unit_ms}|{handoff_force_critical_ms}|{handoff_high_relief_ms}|"
+        "{critical}|{major}|{minor}".format(
             **default_policy, **default_policy["severity_weight"]
         )
     )
@@ -157,7 +177,9 @@ def _policy_checksum(policy_data: dict) -> str:
                 "{no_overlap_bonus}|{segment_bonus}|{score_threshold_critical}|"
                 "{score_threshold_high}|{suppress_penalty_ms}|{boost_credit_ms}|"
                 "{suppress_unit_ms}|{boost_unit_ms}|{min_queue_floor_ms}|"
-                "{boost_force_critical_ms}|{boost_high_relief_ms}|{critical}|{major}|{minor}".format(
+                "{boost_force_critical_ms}|{boost_high_relief_ms}|{handoff_penalty_ms}|"
+                "{handoff_unit_ms}|{handoff_force_critical_ms}|{handoff_high_relief_ms}|"
+                "{critical}|{major}|{minor}".format(
                     profile=profile, **policy, **policy["severity_weight"]
                 )
             )
@@ -210,6 +232,43 @@ def overlap_ms(start_a: int, end_a: int, start_b: int, end_b: int) -> int:
     return max(0, min(end_a, end_b) - max(start_a, start_b))
 
 
+def _compact_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    merged: list[list[int]] = []
+    for start, end in sorted(intervals):
+        if not merged or start > merged[-1][1]:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return [(start, end) for start, end in merged]
+
+
+def _window_overlap_spans(
+    start_ms: int,
+    end_ms: int,
+    intervals: list[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    for interval_start, interval_end in intervals:
+        span_start = max(start_ms, interval_start)
+        span_end = min(end_ms, interval_end)
+        if span_end > span_start:
+            spans.append((span_start, span_end))
+    return spans
+
+
+def _probe_overlap_ms(
+    anchor_ms: int,
+    intervals: list[tuple[int, int]],
+    lookback_ms: int = 180,
+) -> int:
+    probe_start = anchor_ms - lookback_ms
+    probe_end = anchor_ms + 1
+    return sum(
+        overlap_ms(probe_start, probe_end, interval_start, interval_end)
+        for interval_start, interval_end in intervals
+    )
+
+
 def maintenance_by_service(maintenance_rows: list[dict]) -> dict[str, list[tuple[int, int]]]:
     by_service: dict[str, list[tuple[int, int]]] = {}
     for row in maintenance_rows:
@@ -221,14 +280,7 @@ def maintenance_by_service(maintenance_rows: list[dict]) -> dict[str, list[tuple
         by_service.setdefault(service, []).append((start, end))
     merged_by_service: dict[str, list[tuple[int, int]]] = {}
     for service in by_service:
-        intervals = sorted(by_service[service])
-        merged: list[list[int]] = []
-        for start, end in intervals:
-            if not merged or start > merged[-1][1]:
-                merged.append([start, end])
-            else:
-                merged[-1][1] = max(merged[-1][1], end)
-        merged_by_service[service] = [(start, end) for start, end in merged]
+        merged_by_service[service] = _compact_intervals(by_service[service])
     return merged_by_service
 
 
@@ -249,16 +301,28 @@ def exceptions_by_service(
 
     compacted: dict[str, dict[str, list[tuple[int, int]]]] = {}
     for (service, action), intervals in by_service_action.items():
-        merged: list[list[int]] = []
-        for start, end in sorted(intervals):
-            if not merged or start > merged[-1][1]:
-                merged.append([start, end])
-            else:
-                merged[-1][1] = max(merged[-1][1], end)
-        compacted.setdefault(service, {})[action] = [
-            (start, end) for start, end in merged
-        ]
+        compacted.setdefault(service, {})[action] = _compact_intervals(intervals)
     return compacted
+
+
+def handoffs_by_service_scope(
+    handoff_rows: list[dict],
+) -> dict[tuple[str, str], list[tuple[int, int]]]:
+    by_key: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    for row in handoff_rows:
+        service = normalize_service(row.get("service", ""))
+        scope = normalize_handoff_scope(row.get("severity_scope", ""))
+        if not scope:
+            continue
+        start = normalize_ms(row.get("start_ms", 0))
+        end = normalize_ms(row.get("end_ms", 0))
+        if end <= start:
+            continue
+        by_key.setdefault((service, scope), []).append((start, end))
+    return {
+        key: _compact_intervals(intervals)
+        for key, intervals in by_key.items()
+    }
 
 
 def _intervals_intersection_ms(
@@ -285,11 +349,13 @@ def merge_windows(
     canonical_rows: list[dict],
     maintenance_rows: list[dict],
     exception_rows: list[dict],
+    handoff_rows: list[dict],
 ) -> tuple[
     dict[str, list[dict]],
     int,
     dict[str, list[tuple[int, int]]],
     dict[str, dict[str, list[tuple[int, int]]]],
+    dict[tuple[str, str], list[tuple[int, int]]],
 ]:
     by_service: dict[str, list[dict]] = {}
     planned_excluded_count = 0
@@ -301,6 +367,7 @@ def merge_windows(
 
     maintenance = maintenance_by_service(maintenance_rows)
     exceptions = exceptions_by_service(exception_rows)
+    handoffs = handoffs_by_service_scope(handoff_rows)
     windows: dict[str, list[dict]] = {}
     for service in sorted(by_service):
         rows = sorted(by_service[service], key=lambda row: row["start_ms"])
@@ -345,28 +412,25 @@ def merge_windows(
         for block in merged:
             block["duration_ms"] = block["end_ms"] - block["start_ms"]
             block["source_incident_ids"] = sorted(block["source_incident_ids"])
-            overlap_spans: list[tuple[int, int]] = []
-            for start, end in maintenance.get(service, []):
-                span_start = max(block["start_ms"], start)
-                span_end = min(block["end_ms"], end)
-                if span_end > span_start:
-                    overlap_spans.append((span_start, span_end))
+            overlap_spans = _window_overlap_spans(
+                block["start_ms"],
+                block["end_ms"],
+                maintenance.get(service, []),
+            )
             overlap_total = sum(span_end - span_start for span_start, span_end in overlap_spans)
             block["maintenance_overlap_ms"] = overlap_total
             block["maintenance_span_count"] = len(overlap_spans)
             block["billable_duration_ms"] = max(block["duration_ms"] - overlap_total, 0)
-            suppress_spans: list[tuple[int, int]] = []
-            boost_spans: list[tuple[int, int]] = []
-            for start, end in exceptions.get(service, {}).get("suppress", []):
-                span_start = max(block["start_ms"], start)
-                span_end = min(block["end_ms"], end)
-                if span_end > span_start:
-                    suppress_spans.append((span_start, span_end))
-            for start, end in exceptions.get(service, {}).get("boost", []):
-                span_start = max(block["start_ms"], start)
-                span_end = min(block["end_ms"], end)
-                if span_end > span_start:
-                    boost_spans.append((span_start, span_end))
+            suppress_spans = _window_overlap_spans(
+                block["start_ms"],
+                block["end_ms"],
+                exceptions.get(service, {}).get("suppress", []),
+            )
+            boost_spans = _window_overlap_spans(
+                block["start_ms"],
+                block["end_ms"],
+                exceptions.get(service, {}).get("boost", []),
+            )
             suppression_raw_ms = sum(
                 span_end - span_start for span_start, span_end in suppress_spans
             )
@@ -377,25 +441,53 @@ def merge_windows(
             intersection_ms = _intervals_intersection_ms(suppress_spans, boost_spans)
             block["suppression_overlap_ms"] = max(suppression_raw_ms - intersection_ms, 0)
             block["boost_overlap_ms"] = boost_overlap_ms
+
+            handoff_spans = _window_overlap_spans(
+                block["start_ms"],
+                block["end_ms"],
+                handoffs.get((service, "all"), []),
+            )
+            handoff_spans.extend(
+                _window_overlap_spans(
+                    block["start_ms"],
+                    block["end_ms"],
+                    handoffs.get((service, block["max_severity"]), []),
+                )
+            )
+            compacted_handoff_spans = _compact_intervals(handoff_spans)
+            block["handoff_overlap_ms"] = sum(
+                span_end - span_start for span_start, span_end in compacted_handoff_spans
+            )
+            block["handoff_segment_count"] = len(compacted_handoff_spans)
+            block["adjusted_billable_duration_ms"] = max(
+                block["billable_duration_ms"] - (block["handoff_overlap_ms"] // 2),
+                0,
+            )
             block["window_signature"] = hashlib.sha1(
                 (
                     f"{service}|{block['start_ms']}|{block['end_ms']}|"
-                    f"{','.join(block['source_incident_ids'])}|{block['max_severity']}"
+                    f"{','.join(block['source_incident_ids'])}|{block['max_severity']}|"
+                    f"{block['handoff_segment_count']}"
                 ).encode("utf-8")
             ).hexdigest()[:10]
 
         windows[service] = merged
 
-    return windows, planned_excluded_count, maintenance, exceptions
+    return windows, planned_excluded_count, maintenance, exceptions, handoffs
 
 
-def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]:
+def build_queue(
+    windows: dict[str, list[dict]],
+    policy_data: dict,
+    handoffs: dict[tuple[str, str], list[tuple[int, int]]],
+) -> list[dict]:
     rows: list[dict] = []
     for service, blocks in windows.items():
         policy_profile, policy = _policy_for_service(service, policy_data)
         for block in blocks:
             suppress_unit = max(policy["suppress_unit_ms"], 1)
             boost_unit = max(policy["boost_unit_ms"], 1)
+            handoff_unit = max(policy["handoff_unit_ms"], 1)
             suppress_units = (
                 (block["suppression_overlap_ms"] + suppress_unit - 1) // suppress_unit
                 if block["suppression_overlap_ms"] > 0
@@ -408,29 +500,54 @@ def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]
                 - boost_units * policy["boost_credit_ms"],
                 policy["min_queue_floor_ms"],
             )
-            if block["billable_duration_ms"] < effective_queue_min_ms:
+            handoff_units = block["handoff_overlap_ms"] // handoff_unit
+            adjusted_queue_min_ms = (
+                effective_queue_min_ms
+                + handoff_units * policy["handoff_penalty_ms"]
+            )
+            if block["adjusted_billable_duration_ms"] < adjusted_queue_min_ms:
                 continue
+
+            all_probe_ms = _probe_overlap_ms(
+                block["end_ms"],
+                handoffs.get((service, "all"), []),
+            )
+            severity_probe_ms = _probe_overlap_ms(
+                block["end_ms"],
+                handoffs.get((service, block["max_severity"]), []),
+            )
+            handoff_pressure_score = (
+                (all_probe_ms // 30)
+                + (severity_probe_ms // 20)
+                + block["handoff_segment_count"]
+            )
+
             exception_balance_score = int(boost_units - suppress_units)
             severity_weight = policy["severity_weight"].get(block["max_severity"], 0)
             escalation_score = (
-                block["billable_duration_ms"] // 60
+                block["adjusted_billable_duration_ms"] // 60
                 + block["incident_count"] * 2
                 + block["critical_incident_count"] * 3
                 + (policy["no_overlap_bonus"] if block["maintenance_overlap_ms"] == 0 else 0)
                 + block["maintenance_span_count"] * policy["segment_bonus"]
                 + severity_weight
                 + exception_balance_score * 2
+                + handoff_pressure_score * 2
             )
             if (
-                (block["max_severity"] == "critical" and block["billable_duration_ms"] >= policy["critical_p1_min_ms"])
-                or block["billable_duration_ms"] >= policy["critical_threshold_ms"]
+                (
+                    block["max_severity"] == "critical"
+                    and block["adjusted_billable_duration_ms"] >= policy["critical_p1_min_ms"]
+                )
+                or block["adjusted_billable_duration_ms"] >= policy["critical_threshold_ms"]
                 or block["critical_incident_count"] >= policy["critical_count_for_critical"]
                 or escalation_score >= policy["score_threshold_critical"]
                 or block["boost_overlap_ms"] >= policy["boost_force_critical_ms"]
+                or block["handoff_overlap_ms"] >= policy["handoff_force_critical_ms"]
             ):
                 priority = "critical"
             elif (
-                block["billable_duration_ms"] >= policy["high_threshold_ms"]
+                block["adjusted_billable_duration_ms"] >= policy["high_threshold_ms"]
                 or (block["incident_count"] >= 3 and block["max_severity"] in {"major", "critical"})
                 or (
                     block["maintenance_overlap_ms"] == 0
@@ -439,8 +556,13 @@ def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]
                 or escalation_score >= policy["score_threshold_high"]
                 or (
                     exception_balance_score > 0
-                    and block["billable_duration_ms"]
+                    and block["adjusted_billable_duration_ms"]
                     >= max(policy["high_threshold_ms"] - policy["boost_high_relief_ms"], 0)
+                )
+                or (
+                    handoff_pressure_score > 0
+                    and block["adjusted_billable_duration_ms"]
+                    >= max(policy["high_threshold_ms"] - policy["handoff_high_relief_ms"], 0)
                 )
             ):
                 priority = "high"
@@ -453,9 +575,16 @@ def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]
                     f"{incident_ids_csv}|{block['window_signature']}|{block['max_severity']}|"
                     f"{block['maintenance_span_count']}|{policy_profile}|"
                     f"{block['suppression_overlap_ms']}|{block['boost_overlap_ms']}|"
-                    f"{effective_queue_min_ms}|{exception_balance_score}"
+                    f"{effective_queue_min_ms}|{adjusted_queue_min_ms}|"
+                    f"{block['handoff_overlap_ms']}|{handoff_pressure_score}|{exception_balance_score}"
                 ).encode("utf-8")
             ).hexdigest()[:12]
+            queue_digest = hashlib.sha1(
+                (
+                    f"{service}:{block['start_ms']}-{block['end_ms']}|{priority}|"
+                    f"{escalation_score}|{handoff_pressure_score}"
+                ).encode("utf-8")
+            ).hexdigest()[:10]
             rows.append(
                 {
                     "window_id": f"{service}:{block['start_ms']}-{block['end_ms']}",
@@ -468,6 +597,9 @@ def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]
                     "suppression_overlap_ms": block["suppression_overlap_ms"],
                     "boost_overlap_ms": block["boost_overlap_ms"],
                     "billable_duration_ms": block["billable_duration_ms"],
+                    "handoff_overlap_ms": block["handoff_overlap_ms"],
+                    "handoff_segment_count": block["handoff_segment_count"],
+                    "adjusted_billable_duration_ms": block["adjusted_billable_duration_ms"],
                     "incident_count": block["incident_count"],
                     "critical_incident_count": block["critical_incident_count"],
                     "source_incident_ids": block["source_incident_ids"],
@@ -476,10 +608,13 @@ def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]
                     "policy_profile": policy_profile,
                     "policy_queue_min_ms": policy["queue_min_effective_ms"],
                     "effective_queue_min_ms": effective_queue_min_ms,
+                    "adjusted_queue_min_ms": adjusted_queue_min_ms,
                     "exception_balance_score": exception_balance_score,
+                    "handoff_pressure_score": handoff_pressure_score,
                     "escalation_score": escalation_score,
                     "priority": priority,
                     "outage_signature": signature,
+                    "queue_digest": queue_digest,
                 }
             )
 
@@ -488,8 +623,9 @@ def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]
         key=lambda row: (
             rank[row["priority"]],
             -row["escalation_score"],
+            -row["handoff_pressure_score"],
             -row["exception_balance_score"],
-            -row["billable_duration_ms"],
+            -row["adjusted_billable_duration_ms"],
             -row["critical_incident_count"],
             -row["maintenance_span_count"],
             -row["incident_count"],
@@ -505,6 +641,7 @@ def build_summary(
     canonical_rows: list[dict],
     maintenance: dict[str, list[tuple[int, int]]],
     exceptions: dict[str, dict[str, list[tuple[int, int]]]],
+    handoffs: dict[tuple[str, str], list[tuple[int, int]]],
     policy_data: dict,
     windows: dict[str, list[dict]],
     queue: list[dict],
@@ -527,8 +664,19 @@ def build_summary(
     total_boost_overlap = sum(
         block["boost_overlap_ms"] for blocks in windows.values() for block in blocks
     )
+    total_handoff_overlap = sum(
+        block["handoff_overlap_ms"] for blocks in windows.values() for block in blocks
+    )
+    total_handoff_segments = sum(
+        block["handoff_segment_count"] for blocks in windows.values() for block in blocks
+    )
     total_billable = sum(
         block["billable_duration_ms"] for blocks in windows.values() for block in blocks
+    )
+    total_adjusted_billable = sum(
+        block["adjusted_billable_duration_ms"]
+        for blocks in windows.values()
+        for block in blocks
     )
     longest_window = max(
         (block["duration_ms"] for blocks in windows.values() for block in blocks),
@@ -543,6 +691,10 @@ def build_summary(
     max_escalation_score = max((row["escalation_score"] for row in queue), default=0)
     max_exception_balance_score = max(
         (row["exception_balance_score"] for row in queue),
+        default=0,
+    )
+    max_handoff_pressure_score = max(
+        (row["handoff_pressure_score"] for row in queue),
         default=0,
     )
     canonical_input_checksum = hashlib.sha256(
@@ -572,6 +724,16 @@ def build_summary(
             for start, end in exceptions.get(service, {}).get(action, [])
         ).encode("utf-8")
     ).hexdigest()
+    handoff_compaction_checksum = hashlib.sha256(
+        "\n".join(
+            f"{service}|{scope}|{start}|{end}"
+            for service, scope in sorted(handoffs)
+            for start, end in handoffs[(service, scope)]
+        ).encode("utf-8")
+    ).hexdigest()
+    queue_digest_checksum = hashlib.sha256(
+        "|".join(row["queue_digest"] for row in queue).encode("utf-8")
+    ).hexdigest()
     policy_checksum = _policy_checksum(policy_data)
 
     return {
@@ -586,18 +748,24 @@ def build_summary(
         "total_maintenance_span_count": total_maintenance_span_count,
         "total_suppression_overlap_ms": total_suppression_overlap,
         "total_boost_overlap_ms": total_boost_overlap,
+        "total_handoff_overlap_ms": total_handoff_overlap,
+        "total_handoff_segment_count": total_handoff_segments,
         "total_billable_downtime_ms": total_billable,
+        "total_adjusted_billable_downtime_ms": total_adjusted_billable,
         "longest_window_ms": longest_window,
         "queued_window_count": len(queue),
         "priority_counts": priority_counts,
         "max_escalation_score": max_escalation_score,
         "max_exception_balance_score": max_exception_balance_score,
+        "max_handoff_pressure_score": max_handoff_pressure_score,
         "planned_excluded_count": planned_excluded_count,
         "critical_window_count": critical_window_count,
         "canonical_input_checksum": canonical_input_checksum,
         "queue_signature_checksum": queue_signature_checksum,
         "maintenance_compaction_checksum": maintenance_compaction_checksum,
         "exception_compaction_checksum": exception_compaction_checksum,
+        "handoff_compaction_checksum": handoff_compaction_checksum,
+        "queue_digest_checksum": queue_digest_checksum,
         "policy_checksum": policy_checksum,
     }
 
@@ -620,19 +788,22 @@ def compile_outages(input_path: Path, output_dir: Path) -> None:
     raw_rows = load_outages(input_path)
     maintenance_rows = load_maintenance()
     exception_rows = load_exceptions()
+    handoff_rows = load_handoffs()
     policy_data = load_policies()
     canonical_rows = canonicalize(raw_rows)
-    windows, planned_excluded_count, maintenance, exceptions = merge_windows(
+    windows, planned_excluded_count, maintenance, exceptions, handoffs = merge_windows(
         canonical_rows,
         maintenance_rows,
         exception_rows,
+        handoff_rows,
     )
-    queue = build_queue(windows, policy_data)
+    queue = build_queue(windows, policy_data, handoffs)
     summary = build_summary(
         raw_rows=raw_rows,
         canonical_rows=canonical_rows,
         maintenance=maintenance,
         exceptions=exceptions,
+        handoffs=handoffs,
         policy_data=policy_data,
         windows=windows,
         queue=queue,

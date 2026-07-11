@@ -18,23 +18,29 @@
       "total_maintenance_span_count": 9,
       "total_suppression_overlap_ms": 330,
       "total_boost_overlap_ms": 290,
+      "total_handoff_overlap_ms": 660,
+      "total_handoff_segment_count": 6,
       "total_billable_downtime_ms": 2210,
+      "total_adjusted_billable_downtime_ms": 1880,
       "longest_window_ms": 660,
-      "queued_window_count": 6,
+      "queued_window_count": 4,
       "priority_counts": {
-        "critical": 2,
-        "high": 2,
+        "critical": 1,
+        "high": 1,
         "medium": 2
       },
-      "max_escalation_score": 23,
+      "max_escalation_score": 27,
       "max_exception_balance_score": 1,
+      "max_handoff_pressure_score": 3,
       "planned_excluded_count": 2,
       "critical_window_count": 2,
       "canonical_input_checksum": "8df93636609c5ee51ca80cb503ce174156dbef710a7fdd0d0864e77bfe6fef0e",
-      "queue_signature_checksum": "e65f666885e139bee6d783ea762eff7c8486f1ffdd3b28d129c6898f00af01f9",
+      "queue_signature_checksum": "dcf6eb8780ef7116f717ed8c2b46cbef947d3549a6bb119255a2b5b1beea88dd",
       "maintenance_compaction_checksum": "dd3320c1971e6fee556761fb4e7a5e2499caf7bb2125a0756642139b8776a657",
       "exception_compaction_checksum": "34783a37b3f8cb31915ef174e81c06444a3fc28c7d1a0c39548523c8feeaa72d",
-      "policy_checksum": "6dfa895a7ddd16ab7acf4434432216cf6cb833f24218d02c5968c53fd87d4a65"
+      "handoff_compaction_checksum": "eb1cc67d2ebac05cc1c1679528b7ec369cddb24b974391ebaeb9cb8e831dbe28",
+      "queue_digest_checksum": "924b6fea2e2a8e59540aa71b529d4b94854c065f890f41e03e59f837e0dea021",
+      "policy_checksum": "494c51715039e116e7faa54aa23dc4cb86c7f0655faa7fc08476c0bdd94ff068"
     },
     "windows": {
       "auth": [
@@ -55,7 +61,10 @@
           "billable_duration_ms": 530,
           "suppression_overlap_ms": 140,
           "boost_overlap_ms": 100,
-          "window_signature": "410608022f"
+          "handoff_overlap_ms": 300,
+          "handoff_segment_count": 2,
+          "adjusted_billable_duration_ms": 380,
+          "window_signature": "0302a1bb99"
         },
         {
           "start_ms": 1100,
@@ -72,7 +81,10 @@
           "billable_duration_ms": 260,
           "suppression_overlap_ms": 0,
           "boost_overlap_ms": 0,
-          "window_signature": "da471ceee0"
+          "handoff_overlap_ms": 0,
+          "handoff_segment_count": 0,
+          "adjusted_billable_duration_ms": 260,
+          "window_signature": "56e4d6a99e"
         }
       ],
       "billing": [
@@ -92,7 +104,10 @@
           "billable_duration_ms": 350,
           "suppression_overlap_ms": 0,
           "boost_overlap_ms": 90,
-          "window_signature": "9447d5a57a"
+          "handoff_overlap_ms": 0,
+          "handoff_segment_count": 0,
+          "adjusted_billable_duration_ms": 350,
+          "window_signature": "4a12b781b8"
         },
         {
           "start_ms": 900,
@@ -110,7 +125,10 @@
           "billable_duration_ms": 360,
           "suppression_overlap_ms": 150,
           "boost_overlap_ms": 0,
-          "window_signature": "28966b8502"
+          "handoff_overlap_ms": 170,
+          "handoff_segment_count": 2,
+          "adjusted_billable_duration_ms": 275,
+          "window_signature": "310912a19d"
         }
       ],
       "search": [
@@ -130,7 +148,10 @@
           "billable_duration_ms": 270,
           "suppression_overlap_ms": 0,
           "boost_overlap_ms": 0,
-          "window_signature": "dd76a0dcee"
+          "handoff_overlap_ms": 0,
+          "handoff_segment_count": 0,
+          "adjusted_billable_duration_ms": 270,
+          "window_signature": "c6023032eb"
         },
         {
           "start_ms": 600,
@@ -148,7 +169,10 @@
           "billable_duration_ms": 440,
           "suppression_overlap_ms": 40,
           "boost_overlap_ms": 100,
-          "window_signature": "f66c4f42b0"
+          "handoff_overlap_ms": 190,
+          "handoff_segment_count": 2,
+          "adjusted_billable_duration_ms": 345,
+          "window_signature": "be22115657"
         }
       ]
     },
@@ -164,6 +188,9 @@
         "suppression_overlap_ms": 40,
         "boost_overlap_ms": 100,
         "billable_duration_ms": 440,
+        "handoff_overlap_ms": 190,
+        "handoff_segment_count": 2,
+        "adjusted_billable_duration_ms": 345,
         "incident_count": 2,
         "critical_incident_count": 1,
         "source_incident_ids": [
@@ -171,42 +198,17 @@
           "s4"
         ],
         "max_severity": "critical",
-        "window_signature": "f66c4f42b0",
+        "window_signature": "be22115657",
         "policy_profile": "search",
         "policy_queue_min_ms": 230,
         "effective_queue_min_ms": 210,
+        "adjusted_queue_min_ms": 315,
         "exception_balance_score": 1,
-        "escalation_score": 23,
+        "handoff_pressure_score": 3,
+        "escalation_score": 27,
         "priority": "critical",
-        "outage_signature": "fc36e75366b3"
-      },
-      {
-        "window_id": "auth:100-760",
-        "service": "auth",
-        "start_ms": 100,
-        "end_ms": 760,
-        "duration_ms": 660,
-        "maintenance_overlap_ms": 130,
-        "maintenance_span_count": 2,
-        "suppression_overlap_ms": 140,
-        "boost_overlap_ms": 100,
-        "billable_duration_ms": 530,
-        "incident_count": 3,
-        "critical_incident_count": 1,
-        "source_incident_ids": [
-          "a1",
-          "a2",
-          "a3"
-        ],
-        "max_severity": "critical",
-        "window_signature": "410608022f",
-        "policy_profile": "auth",
-        "policy_queue_min_ms": 240,
-        "effective_queue_min_ms": 290,
-        "exception_balance_score": -1,
-        "escalation_score": 22,
-        "priority": "critical",
-        "outage_signature": "05b3943316ae"
+        "outage_signature": "a2b269505734",
+        "queue_digest": "e702326db5"
       },
       {
         "window_id": "billing:200-610",
@@ -219,6 +221,9 @@
         "suppression_overlap_ms": 0,
         "boost_overlap_ms": 90,
         "billable_duration_ms": 350,
+        "handoff_overlap_ms": 0,
+        "handoff_segment_count": 0,
+        "adjusted_billable_duration_ms": 350,
         "incident_count": 2,
         "critical_incident_count": 0,
         "source_incident_ids": [
@@ -226,41 +231,17 @@
           "b2"
         ],
         "max_severity": "major",
-        "window_signature": "9447d5a57a",
+        "window_signature": "4a12b781b8",
         "policy_profile": "billing",
         "policy_queue_min_ms": 210,
         "effective_queue_min_ms": 180,
+        "adjusted_queue_min_ms": 180,
         "exception_balance_score": 1,
+        "handoff_pressure_score": 0,
         "escalation_score": 16,
         "priority": "high",
-        "outage_signature": "60487a4528bd"
-      },
-      {
-        "window_id": "billing:900-1300",
-        "service": "billing",
-        "start_ms": 900,
-        "end_ms": 1300,
-        "duration_ms": 400,
-        "maintenance_overlap_ms": 40,
-        "maintenance_span_count": 1,
-        "suppression_overlap_ms": 150,
-        "boost_overlap_ms": 0,
-        "billable_duration_ms": 360,
-        "incident_count": 2,
-        "critical_incident_count": 0,
-        "source_incident_ids": [
-          "b3",
-          "b4"
-        ],
-        "max_severity": "major",
-        "window_signature": "28966b8502",
-        "policy_profile": "billing",
-        "policy_queue_min_ms": 210,
-        "effective_queue_min_ms": 345,
-        "exception_balance_score": -3,
-        "escalation_score": 9,
-        "priority": "high",
-        "outage_signature": "3ba07ed29de7"
+        "outage_signature": "1c9e7eb5bd90",
+        "queue_digest": "8020173407"
       },
       {
         "window_id": "search:100-410",
@@ -273,6 +254,9 @@
         "suppression_overlap_ms": 0,
         "boost_overlap_ms": 0,
         "billable_duration_ms": 270,
+        "handoff_overlap_ms": 0,
+        "handoff_segment_count": 0,
+        "adjusted_billable_duration_ms": 270,
         "incident_count": 2,
         "critical_incident_count": 0,
         "source_incident_ids": [
@@ -280,14 +264,17 @@
           "s2"
         ],
         "max_severity": "major",
-        "window_signature": "dd76a0dcee",
+        "window_signature": "c6023032eb",
         "policy_profile": "search",
         "policy_queue_min_ms": 230,
         "effective_queue_min_ms": 230,
+        "adjusted_queue_min_ms": 230,
         "exception_balance_score": 0,
+        "handoff_pressure_score": 0,
         "escalation_score": 13,
         "priority": "medium",
-        "outage_signature": "e5cc76e58d9f"
+        "outage_signature": "102fc6e38dd5",
+        "queue_digest": "dfbc7ff07a"
       },
       {
         "window_id": "auth:1100-1380",
@@ -300,20 +287,26 @@
         "suppression_overlap_ms": 0,
         "boost_overlap_ms": 0,
         "billable_duration_ms": 260,
+        "handoff_overlap_ms": 0,
+        "handoff_segment_count": 0,
+        "adjusted_billable_duration_ms": 260,
         "incident_count": 1,
         "critical_incident_count": 0,
         "source_incident_ids": [
           "a5"
         ],
         "max_severity": "major",
-        "window_signature": "da471ceee0",
+        "window_signature": "56e4d6a99e",
         "policy_profile": "auth",
         "policy_queue_min_ms": 240,
         "effective_queue_min_ms": 240,
+        "adjusted_queue_min_ms": 240,
         "exception_balance_score": 0,
+        "handoff_pressure_score": 0,
         "escalation_score": 10,
         "priority": "medium",
-        "outage_signature": "8b2253061d40"
+        "outage_signature": "4aaa140b8b62",
+        "queue_digest": "ccfa2ae480"
       }
     ]
   },
@@ -334,23 +327,29 @@
       "total_maintenance_span_count": 4,
       "total_suppression_overlap_ms": 180,
       "total_boost_overlap_ms": 190,
+      "total_handoff_overlap_ms": 190,
+      "total_handoff_segment_count": 3,
       "total_billable_downtime_ms": 1350,
+      "total_adjusted_billable_downtime_ms": 1255,
       "longest_window_ms": 580,
-      "queued_window_count": 3,
+      "queued_window_count": 2,
       "priority_counts": {
         "critical": 1,
-        "high": 2,
+        "high": 1,
         "medium": 0
       },
-      "max_escalation_score": 22,
+      "max_escalation_score": 28,
       "max_exception_balance_score": 1,
+      "max_handoff_pressure_score": 3,
       "planned_excluded_count": 1,
       "critical_window_count": 1,
       "canonical_input_checksum": "937f40db724125c8ed784a7fad5f76810a363dfb9ce708976949176a28c8cce6",
-      "queue_signature_checksum": "7a463623d89d8b9f161b78323320b0567706ebd02053543e45129abb02de3041",
+      "queue_signature_checksum": "a2f1d781a7885c2659ccf4a7023131e3e1b805b015a2c908d75faf973c974236",
       "maintenance_compaction_checksum": "dd3320c1971e6fee556761fb4e7a5e2499caf7bb2125a0756642139b8776a657",
       "exception_compaction_checksum": "34783a37b3f8cb31915ef174e81c06444a3fc28c7d1a0c39548523c8feeaa72d",
-      "policy_checksum": "6dfa895a7ddd16ab7acf4434432216cf6cb833f24218d02c5968c53fd87d4a65"
+      "handoff_compaction_checksum": "eb1cc67d2ebac05cc1c1679528b7ec369cddb24b974391ebaeb9cb8e831dbe28",
+      "queue_digest_checksum": "8e8f76031d316276952b937c5c206682aa0cf644e6cc3b7f9e2a1cbdef4fdc8a",
+      "policy_checksum": "494c51715039e116e7faa54aa23dc4cb86c7f0655faa7fc08476c0bdd94ff068"
     },
     "windows": {
       "auth": [
@@ -370,7 +369,10 @@
           "billable_duration_ms": 420,
           "suppression_overlap_ms": 140,
           "boost_overlap_ms": 0,
-          "window_signature": "28b239b92f"
+          "handoff_overlap_ms": 120,
+          "handoff_segment_count": 1,
+          "adjusted_billable_duration_ms": 360,
+          "window_signature": "d93975293f"
         }
       ],
       "billing": [
@@ -389,7 +391,10 @@
           "billable_duration_ms": 520,
           "suppression_overlap_ms": 0,
           "boost_overlap_ms": 90,
-          "window_signature": "4eca75c14c"
+          "handoff_overlap_ms": 0,
+          "handoff_segment_count": 0,
+          "adjusted_billable_duration_ms": 520,
+          "window_signature": "3889a2e950"
         }
       ],
       "search": [
@@ -409,7 +414,10 @@
           "billable_duration_ms": 410,
           "suppression_overlap_ms": 40,
           "boost_overlap_ms": 100,
-          "window_signature": "69f54e1a8d"
+          "handoff_overlap_ms": 70,
+          "handoff_segment_count": 2,
+          "adjusted_billable_duration_ms": 375,
+          "window_signature": "0f0e35020f"
         }
       ]
     },
@@ -425,6 +433,9 @@
         "suppression_overlap_ms": 40,
         "boost_overlap_ms": 100,
         "billable_duration_ms": 410,
+        "handoff_overlap_ms": 70,
+        "handoff_segment_count": 2,
+        "adjusted_billable_duration_ms": 375,
         "incident_count": 2,
         "critical_incident_count": 1,
         "source_incident_ids": [
@@ -432,14 +443,17 @@
           "x6"
         ],
         "max_severity": "critical",
-        "window_signature": "69f54e1a8d",
+        "window_signature": "0f0e35020f",
         "policy_profile": "search",
         "policy_queue_min_ms": 230,
         "effective_queue_min_ms": 210,
+        "adjusted_queue_min_ms": 245,
         "exception_balance_score": 1,
-        "escalation_score": 22,
+        "handoff_pressure_score": 3,
+        "escalation_score": 28,
         "priority": "critical",
-        "outage_signature": "156c1b3c8d2d"
+        "outage_signature": "7592ba76ed0e",
+        "queue_digest": "e764cdd36c"
       },
       {
         "window_id": "billing:120-700",
@@ -452,47 +466,26 @@
         "suppression_overlap_ms": 0,
         "boost_overlap_ms": 90,
         "billable_duration_ms": 520,
+        "handoff_overlap_ms": 0,
+        "handoff_segment_count": 0,
+        "adjusted_billable_duration_ms": 520,
         "incident_count": 1,
         "critical_incident_count": 0,
         "source_incident_ids": [
           "x4"
         ],
         "max_severity": "major",
-        "window_signature": "4eca75c14c",
+        "window_signature": "3889a2e950",
         "policy_profile": "billing",
         "policy_queue_min_ms": 210,
         "effective_queue_min_ms": 180,
+        "adjusted_queue_min_ms": 180,
         "exception_balance_score": 1,
+        "handoff_pressure_score": 0,
         "escalation_score": 17,
         "priority": "high",
-        "outage_signature": "506e79eae754"
-      },
-      {
-        "window_id": "auth:10-500",
-        "service": "auth",
-        "start_ms": 10,
-        "end_ms": 500,
-        "duration_ms": 490,
-        "maintenance_overlap_ms": 70,
-        "maintenance_span_count": 1,
-        "suppression_overlap_ms": 140,
-        "boost_overlap_ms": 0,
-        "billable_duration_ms": 420,
-        "incident_count": 2,
-        "critical_incident_count": 0,
-        "source_incident_ids": [
-          "x1",
-          "x2"
-        ],
-        "max_severity": "major",
-        "window_signature": "28b239b92f",
-        "policy_profile": "auth",
-        "policy_queue_min_ms": 240,
-        "effective_queue_min_ms": 360,
-        "exception_balance_score": -3,
-        "escalation_score": 9,
-        "priority": "high",
-        "outage_signature": "bc66d1e0d15a"
+        "outage_signature": "a18f2508307e",
+        "queue_digest": "7bd9db3dac"
       }
     ]
   }
