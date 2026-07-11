@@ -1,0 +1,267 @@
+{
+  "contract_version": "1.0",
+  "task_scope": "system-administration / incident-routing",
+  "io": {
+    "cli": "python3 /app/workflow/compile_outages.py --input PATH --output-dir PATH",
+    "default_input": "/app/data/outages.json",
+    "default_output_dir": "/app/output",
+    "fixed_sources": {
+      "maintenance": "/app/data/maintenance_windows.json",
+      "policies": "/app/data/response_policies.json",
+      "exceptions": "/app/data/routing_exceptions.json",
+      "handoff": "/app/data/handoff_windows.json",
+      "blackout": "/app/data/blackout_windows.json",
+      "degrade": "/app/data/degrade_windows.json"
+    },
+    "required_outputs": [
+      "downtime_summary.json",
+      "service_windows.json",
+      "incident_queue.jsonl"
+    ]
+  },
+  "normalization": {
+    "service_aliases": {
+      "authentication": "auth",
+      "payments": "billing",
+      "search-api": "search"
+    },
+    "severity_allowed": [
+      "critical",
+      "major",
+      "minor"
+    ],
+    "severity_default": "minor",
+    "severity_rank_desc": [
+      "critical",
+      "major",
+      "minor"
+    ],
+    "int_coercion": "int(str(value).strip()) with fallback 0",
+    "planned_truthy_strings": [
+      "true",
+      "1",
+      "yes"
+    ]
+  },
+  "dedupe": {
+    "group_by": "incident_id",
+    "keep_rule": [
+      "max end_ms",
+      "max severity rank",
+      "prefer planned == false",
+      "max start_ms",
+      "max service lexicographically"
+    ]
+  },
+  "windowing": {
+    "incident_merge_source": "unplanned incidents only",
+    "incident_stitch_rule": "merge if next.start_ms <= current.end_ms + 30",
+    "maintenance_compaction_rule": "per service, merge touching intervals if next.start_ms <= current.end_ms",
+    "exceptions_compaction_rule": "per (service, action), merge touching intervals if next.start_ms <= current.end_ms",
+    "scope_compaction_rule": "per (service, severity_scope), merge touching intervals if next.start_ms <= current.end_ms",
+    "overlap_formula": "max(0, min(end_a, end_b) - max(start_a, start_b))",
+    "domains_order": [
+      "maintenance",
+      "exceptions",
+      "handoff",
+      "blackout",
+      "degrade"
+    ],
+    "exceptions_actions_allowed": [
+      "suppress",
+      "boost"
+    ],
+    "exceptions_precedence": "boost overlap wins over suppress overlap",
+    "scope_values": [
+      "all",
+      "major",
+      "critical"
+    ],
+    "attenuation": {
+      "adjusted_billable_duration_ms": "max(billable_duration_ms - (handoff_overlap_ms // 2), 0)",
+      "routed_billable_duration_ms": "max(adjusted_billable_duration_ms - (blackout_overlap_ms // 3), 0)",
+      "dispatchable_billable_duration_ms": "max(routed_billable_duration_ms - (degrade_overlap_ms // 4), 0)"
+    }
+  },
+  "policies": {
+    "defaults": {
+      "queue_min_effective_ms": 220,
+      "critical_p1_min_ms": 280,
+      "critical_threshold_ms": 650,
+      "high_threshold_ms": 320,
+      "no_overlap_high_duration_ms": 450,
+      "critical_count_for_critical": 2,
+      "no_overlap_bonus": 4,
+      "segment_bonus": 1,
+      "score_threshold_critical": 34,
+      "score_threshold_high": 18,
+      "suppress_penalty_ms": 40,
+      "boost_credit_ms": 30,
+      "suppress_unit_ms": 50,
+      "boost_unit_ms": 50,
+      "min_queue_floor_ms": 120,
+      "boost_force_critical_ms": 140,
+      "boost_high_relief_ms": 40,
+      "handoff_penalty_ms": 35,
+      "handoff_unit_ms": 60,
+      "handoff_force_critical_ms": 150,
+      "handoff_high_relief_ms": 50,
+      "blackout_penalty_ms": 45,
+      "blackout_unit_ms": 70,
+      "blackout_force_critical_ms": 200,
+      "blackout_high_relief_ms": 55,
+      "degrade_penalty_ms": 30,
+      "degrade_unit_ms": 80,
+      "degrade_force_critical_ms": 170,
+      "degrade_high_relief_ms": 45
+    },
+    "severity_weight_defaults": {
+      "critical": 5,
+      "major": 3,
+      "minor": 1
+    },
+    "override_behavior": "default profile, then service_overrides[service], field-wise merge"
+  },
+  "queue": {
+    "units": {
+      "suppress_units": "0 when suppression_overlap_ms == 0 else ceil(suppression_overlap_ms / max(suppress_unit_ms, 1))",
+      "boost_units": "boost_overlap_ms // max(boost_unit_ms, 1)",
+      "handoff_units": "handoff_overlap_ms // max(handoff_unit_ms, 1)",
+      "blackout_units": "blackout_overlap_ms // max(blackout_unit_ms, 1)",
+      "degrade_units": "degrade_overlap_ms // max(degrade_unit_ms, 1)"
+    },
+    "thresholds": {
+      "effective_queue_min_ms": "max(queue_min_effective_ms + suppress_units*suppress_penalty_ms - boost_units*boost_credit_ms, min_queue_floor_ms)",
+      "adjusted_queue_min_ms": "effective_queue_min_ms + handoff_units*handoff_penalty_ms",
+      "routed_queue_min_ms": "adjusted_queue_min_ms + blackout_units*blackout_penalty_ms",
+      "dispatch_queue_min_ms": "routed_queue_min_ms + degrade_units*degrade_penalty_ms"
+    },
+    "include_rule": "dispatchable_billable_duration_ms >= dispatch_queue_min_ms",
+    "scores": {
+      "exception_balance_score": "boost_units - suppress_units",
+      "handoff_pressure_score_probe": "[end_ms-180, end_ms+1)",
+      "blackout_pressure_score_probe": "[end_ms-240, end_ms+1)",
+      "degrade_pressure_score_probe": "[end_ms-210, end_ms+1)",
+      "handoff_pressure_score": "(all_probe_ms // 30) + (severity_probe_ms // 20) + handoff_segment_count",
+      "blackout_pressure_score": "(all_probe_ms // 36) + (severity_probe_ms // 24) + blackout_segment_count",
+      "degrade_pressure_score": "(all_probe_ms // 34) + (severity_probe_ms // 23) + degrade_segment_count",
+      "escalation_score": "(dispatchable_billable_duration_ms // 60) + incident_count*2 + critical_incident_count*3 + (maintenance_overlap_ms==0 ? no_overlap_bonus : 0) + maintenance_span_count*segment_bonus + severity_weight[max_severity] + exception_balance_score*2 + handoff_pressure_score*2 + blackout_pressure_score*2",
+      "risk_vector": "escalation_score + blackout_pressure_score + (degrade_pressure_score * 2)"
+    },
+    "priority": {
+      "critical": "apply any critical trigger from thresholds, counts, force thresholds, or risk_vector >= score_threshold_critical + 4",
+      "high": "apply any high trigger from thresholds, counts, no-overlap duration, score threshold, relief thresholds, or risk_vector >= score_threshold_high + 2",
+      "fallback": "medium"
+    },
+    "sort_order": [
+      "priority (critical > high > medium)",
+      "escalation_score desc",
+      "handoff_pressure_score desc",
+      "blackout_pressure_score desc",
+      "degrade_pressure_score desc",
+      "risk_vector desc",
+      "exception_balance_score desc",
+      "dispatchable_billable_duration_ms desc",
+      "routed_billable_duration_ms desc",
+      "adjusted_billable_duration_ms desc",
+      "critical_incident_count desc",
+      "maintenance_span_count desc",
+      "incident_count desc",
+      "service asc",
+      "start_ms asc"
+    ]
+  },
+  "schemas": {
+    "service_windows_exact_keys": [
+      "start_ms",
+      "end_ms",
+      "duration_ms",
+      "maintenance_overlap_ms",
+      "maintenance_span_count",
+      "suppression_overlap_ms",
+      "boost_overlap_ms",
+      "billable_duration_ms",
+      "handoff_overlap_ms",
+      "handoff_segment_count",
+      "adjusted_billable_duration_ms",
+      "blackout_overlap_ms",
+      "blackout_segment_count",
+      "routed_billable_duration_ms",
+      "degrade_overlap_ms",
+      "degrade_segment_count",
+      "dispatchable_billable_duration_ms",
+      "incident_count",
+      "critical_incident_count",
+      "source_incident_ids",
+      "max_severity",
+      "window_signature"
+    ],
+    "incident_queue_exact_keys": [
+      "window_id",
+      "service",
+      "start_ms",
+      "end_ms",
+      "duration_ms",
+      "maintenance_overlap_ms",
+      "maintenance_span_count",
+      "suppression_overlap_ms",
+      "boost_overlap_ms",
+      "billable_duration_ms",
+      "handoff_overlap_ms",
+      "handoff_segment_count",
+      "adjusted_billable_duration_ms",
+      "blackout_overlap_ms",
+      "blackout_segment_count",
+      "routed_billable_duration_ms",
+      "degrade_overlap_ms",
+      "degrade_segment_count",
+      "dispatchable_billable_duration_ms",
+      "incident_count",
+      "critical_incident_count",
+      "source_incident_ids",
+      "max_severity",
+      "window_signature",
+      "policy_profile",
+      "policy_queue_min_ms",
+      "effective_queue_min_ms",
+      "adjusted_queue_min_ms",
+      "routed_queue_min_ms",
+      "dispatch_queue_min_ms",
+      "exception_balance_score",
+      "handoff_pressure_score",
+      "blackout_pressure_score",
+      "degrade_pressure_score",
+      "escalation_score",
+      "risk_vector",
+      "priority",
+      "outage_signature",
+      "queue_digest"
+    ],
+    "summary_schema_version": "outage-windows-v1",
+    "summary_severity_counts_order": [
+      "critical",
+      "major",
+      "minor"
+    ],
+    "summary_priority_counts_order": [
+      "critical",
+      "high",
+      "medium"
+    ]
+  },
+  "checksums": {
+    "canonical_input_checksum": "sha256 over canonical incident lines incident_id|service|start_ms|end_ms|severity|planned_int",
+    "queue_signature_checksum": "sha256('|'.join(outage_signature in final queue order))",
+    "queue_digest_checksum": "sha256('|'.join(queue_digest in final queue order))",
+    "maintenance_compaction_checksum": "sha256 over canonical merged maintenance lines service|start_ms|end_ms",
+    "exception_compaction_checksum": "sha256 over canonical compacted exception lines service|action|start_ms|end_ms",
+    "handoff_compaction_checksum": "sha256 over canonical compacted handoff lines service|severity_scope|start_ms|end_ms",
+    "blackout_compaction_checksum": "sha256 over canonical compacted blackout lines service|severity_scope|start_ms|end_ms",
+    "degrade_compaction_checksum": "sha256 over canonical compacted degrade lines service|severity_scope|start_ms|end_ms",
+    "policy_checksum": "sha256 over canonical default+override policy lines including severity weights"
+  },
+  "guardrails": {
+    "original_snapshot_path": "/app/workflow/.compile_outages.original",
+    "tests_tree_access": "forbidden"
+  }
+}
