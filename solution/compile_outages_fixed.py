@@ -12,10 +12,24 @@ SEVERITY_RANK = {"minor": 1, "major": 2, "critical": 3}
 SEVERITY_ORDER = ("critical", "major", "minor")
 PRIORITY_ORDER = ("critical", "high", "medium")
 MAINTENANCE_PATH = Path("/app/data/maintenance_windows.json")
+POLICY_PATH = Path("/app/data/response_policies.json")
 SERVICE_ALIASES = {
     "authentication": "auth",
     "payments": "billing",
     "search-api": "search",
+}
+DEFAULT_POLICY = {
+    "queue_min_effective_ms": 220,
+    "critical_p1_min_ms": 280,
+    "critical_threshold_ms": 650,
+    "high_threshold_ms": 320,
+    "no_overlap_high_duration_ms": 450,
+    "critical_count_for_critical": 2,
+    "no_overlap_bonus": 4,
+    "segment_bonus": 1,
+    "severity_weight": {"critical": 5, "major": 3, "minor": 1},
+    "score_threshold_critical": 34,
+    "score_threshold_high": 18,
 }
 
 
@@ -24,6 +38,10 @@ def load_outages(path: Path) -> list[dict]:
 
 
 def load_maintenance(path: Path = MAINTENANCE_PATH) -> list[dict]:
+    return json.loads(path.read_text())
+
+
+def load_policies(path: Path = POLICY_PATH) -> dict:
     return json.loads(path.read_text())
 
 
@@ -50,6 +68,77 @@ def normalize_ms(value: object) -> int:
         return int(str(value).strip())
     except (TypeError, ValueError):
         return 0
+
+
+def _normalize_policy(raw_policy: dict | None) -> dict:
+    raw_policy = raw_policy or {}
+    normalized = dict(DEFAULT_POLICY)
+    for key in (
+        "queue_min_effective_ms",
+        "critical_p1_min_ms",
+        "critical_threshold_ms",
+        "high_threshold_ms",
+        "no_overlap_high_duration_ms",
+        "critical_count_for_critical",
+        "no_overlap_bonus",
+        "segment_bonus",
+        "score_threshold_critical",
+        "score_threshold_high",
+    ):
+        if key in raw_policy:
+            normalized[key] = normalize_ms(raw_policy.get(key))
+    raw_weights = raw_policy.get("severity_weight", {})
+    if isinstance(raw_weights, dict):
+        weights = dict(DEFAULT_POLICY["severity_weight"])
+        for severity in ("critical", "major", "minor"):
+            if severity in raw_weights:
+                weights[severity] = normalize_ms(raw_weights.get(severity))
+        normalized["severity_weight"] = weights
+    return normalized
+
+
+def _policy_for_service(service: str, policy_data: dict) -> tuple[str, dict]:
+    default_policy = _normalize_policy(policy_data.get("default", {}))
+    overrides = policy_data.get("service_overrides", {})
+    if not isinstance(overrides, dict):
+        return "default", default_policy
+    raw_override = overrides.get(service)
+    if not isinstance(raw_override, dict):
+        return "default", default_policy
+    merged = dict(default_policy)
+    merged.update(_normalize_policy(raw_override))
+    # keep default-provided severity weights when override has partial map
+    if "severity_weight" in raw_override:
+        merged_weights = dict(default_policy["severity_weight"])
+        merged_weights.update(_normalize_policy(raw_override)["severity_weight"])
+        merged["severity_weight"] = merged_weights
+    return service, merged
+
+
+def _policy_checksum(policy_data: dict) -> str:
+    lines: list[str] = []
+    default_policy = _normalize_policy(policy_data.get("default", {}))
+    lines.append(
+        "default|{queue_min_effective_ms}|{critical_p1_min_ms}|{critical_threshold_ms}|"
+        "{high_threshold_ms}|{no_overlap_high_duration_ms}|{critical_count_for_critical}|"
+        "{no_overlap_bonus}|{segment_bonus}|{score_threshold_critical}|"
+        "{score_threshold_high}|{critical}|{major}|{minor}".format(
+            **default_policy, **default_policy["severity_weight"]
+        )
+    )
+    overrides = policy_data.get("service_overrides", {})
+    if isinstance(overrides, dict):
+        for service in sorted(overrides):
+            profile, policy = _policy_for_service(service, policy_data)
+            lines.append(
+                "{profile}|{queue_min_effective_ms}|{critical_p1_min_ms}|{critical_threshold_ms}|"
+                "{high_threshold_ms}|{no_overlap_high_duration_ms}|{critical_count_for_critical}|"
+                "{no_overlap_bonus}|{segment_bonus}|{score_threshold_critical}|"
+                "{score_threshold_high}|{critical}|{major}|{minor}".format(
+                    profile=profile, **policy, **policy["severity_weight"]
+                )
+            )
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
 
 
 def canonicalize(rows: list[dict]) -> list[dict]:
@@ -198,22 +287,37 @@ def merge_windows(
     return windows, planned_excluded_count, maintenance
 
 
-def build_queue(windows: dict[str, list[dict]]) -> list[dict]:
+def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]:
     rows: list[dict] = []
     for service, blocks in windows.items():
+        policy_profile, policy = _policy_for_service(service, policy_data)
         for block in blocks:
-            if block["billable_duration_ms"] < 220:
+            if block["billable_duration_ms"] < policy["queue_min_effective_ms"]:
                 continue
+            severity_weight = policy["severity_weight"].get(block["max_severity"], 0)
+            escalation_score = (
+                block["billable_duration_ms"] // 60
+                + block["incident_count"] * 2
+                + block["critical_incident_count"] * 3
+                + (policy["no_overlap_bonus"] if block["maintenance_overlap_ms"] == 0 else 0)
+                + block["maintenance_span_count"] * policy["segment_bonus"]
+                + severity_weight
+            )
             if (
-                (block["max_severity"] == "critical" and block["billable_duration_ms"] >= 280)
-                or block["billable_duration_ms"] >= 650
-                or block["critical_incident_count"] >= 2
+                (block["max_severity"] == "critical" and block["billable_duration_ms"] >= policy["critical_p1_min_ms"])
+                or block["billable_duration_ms"] >= policy["critical_threshold_ms"]
+                or block["critical_incident_count"] >= policy["critical_count_for_critical"]
+                or escalation_score >= policy["score_threshold_critical"]
             ):
                 priority = "critical"
             elif (
-                block["billable_duration_ms"] >= 320
+                block["billable_duration_ms"] >= policy["high_threshold_ms"]
                 or (block["incident_count"] >= 3 and block["max_severity"] in {"major", "critical"})
-                or (block["maintenance_overlap_ms"] == 0 and block["duration_ms"] >= 450)
+                or (
+                    block["maintenance_overlap_ms"] == 0
+                    and block["duration_ms"] >= policy["no_overlap_high_duration_ms"]
+                )
+                or escalation_score >= policy["score_threshold_high"]
             ):
                 priority = "high"
             else:
@@ -222,7 +326,8 @@ def build_queue(windows: dict[str, list[dict]]) -> list[dict]:
             signature = hashlib.sha1(
                 (
                     f"{service}|{block['start_ms']}|{block['end_ms']}|"
-                    f"{incident_ids_csv}|{block['window_signature']}"
+                    f"{incident_ids_csv}|{block['window_signature']}|{block['max_severity']}|"
+                    f"{block['maintenance_span_count']}|{policy_profile}"
                 ).encode("utf-8")
             ).hexdigest()[:12]
             rows.append(
@@ -240,6 +345,9 @@ def build_queue(windows: dict[str, list[dict]]) -> list[dict]:
                     "source_incident_ids": block["source_incident_ids"],
                     "max_severity": block["max_severity"],
                     "window_signature": block["window_signature"],
+                    "policy_profile": policy_profile,
+                    "policy_queue_min_ms": policy["queue_min_effective_ms"],
+                    "escalation_score": escalation_score,
                     "priority": priority,
                     "outage_signature": signature,
                 }
@@ -249,6 +357,7 @@ def build_queue(windows: dict[str, list[dict]]) -> list[dict]:
     rows.sort(
         key=lambda row: (
             rank[row["priority"]],
+            -row["escalation_score"],
             -row["billable_duration_ms"],
             -row["critical_incident_count"],
             -row["maintenance_span_count"],
@@ -264,6 +373,7 @@ def build_summary(
     raw_rows: list[dict],
     canonical_rows: list[dict],
     maintenance: dict[str, list[tuple[int, int]]],
+    policy_data: dict,
     windows: dict[str, list[dict]],
     queue: list[dict],
     planned_excluded_count: int,
@@ -289,6 +399,10 @@ def build_summary(
     critical_window_count = sum(
         1 for blocks in windows.values() for block in blocks if block["max_severity"] == "critical"
     )
+    priority_counts = {name: 0 for name in PRIORITY_ORDER}
+    for row in queue:
+        priority_counts[row["priority"]] += 1
+    max_escalation_score = max((row["escalation_score"] for row in queue), default=0)
     canonical_input_checksum = hashlib.sha256(
         "\n".join(
             (
@@ -308,6 +422,7 @@ def build_summary(
             for start, end in maintenance[service]
         ).encode("utf-8")
     ).hexdigest()
+    policy_checksum = _policy_checksum(policy_data)
 
     return {
         "schema_version": "outage-windows-v1",
@@ -322,11 +437,14 @@ def build_summary(
         "total_billable_downtime_ms": total_billable,
         "longest_window_ms": longest_window,
         "queued_window_count": len(queue),
+        "priority_counts": priority_counts,
+        "max_escalation_score": max_escalation_score,
         "planned_excluded_count": planned_excluded_count,
         "critical_window_count": critical_window_count,
         "canonical_input_checksum": canonical_input_checksum,
         "queue_signature_checksum": queue_signature_checksum,
         "maintenance_compaction_checksum": maintenance_compaction_checksum,
+        "policy_checksum": policy_checksum,
     }
 
 
@@ -347,13 +465,15 @@ def write_outputs(
 def compile_outages(input_path: Path, output_dir: Path) -> None:
     raw_rows = load_outages(input_path)
     maintenance_rows = load_maintenance()
+    policy_data = load_policies()
     canonical_rows = canonicalize(raw_rows)
     windows, planned_excluded_count, maintenance = merge_windows(canonical_rows, maintenance_rows)
-    queue = build_queue(windows)
+    queue = build_queue(windows, policy_data)
     summary = build_summary(
         raw_rows=raw_rows,
         canonical_rows=canonical_rows,
         maintenance=maintenance,
+        policy_data=policy_data,
         windows=windows,
         queue=queue,
         planned_excluded_count=planned_excluded_count,

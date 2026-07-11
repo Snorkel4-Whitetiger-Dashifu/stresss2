@@ -5,6 +5,7 @@ Keep the CLI contract exactly as-is:
 - default input: `/app/data/outages.json`
 - default output dir: `/app/output`
 - maintenance windows are always loaded from `/app/data/maintenance_windows.json`
+- routing policies are always loaded from `/app/data/response_policies.json`
 
 The run must write exactly three files (no extras): `downtime_summary.json`, `service_windows.json`, `incident_queue.jsonl`.
 
@@ -47,14 +48,25 @@ Processing requirements:
    - `billable_duration_ms = max(duration_ms - maintenance_overlap_ms, 0)`
 
 Queue behavior:
-- include windows when `billable_duration_ms >= 220`
+- resolve policy per normalized service from `/app/data/response_policies.json`:
+  - use `default` profile, then apply `service_overrides[service]` when present
+  - numeric policy fields are int-coerced; missing fields inherit from default
+  - severity weights are merged key-wise (`critical`, `major`, `minor`)
+- include windows when `billable_duration_ms >= policy.queue_min_effective_ms`
 - `window_id`: `"{service}:{start_ms}-{end_ms}"`
-- `outage_signature`: first 12 lowercase hex chars of SHA1 over `"{service}|{start_ms}|{end_ms}|{','.join(source_incident_ids)}|{window_signature}"`
+- `escalation_score`:
+  - `(billable_duration_ms // 60)`
+  - `+ incident_count * 2`
+  - `+ critical_incident_count * 3`
+  - `+ policy.no_overlap_bonus` if `maintenance_overlap_ms == 0`
+  - `+ maintenance_span_count * policy.segment_bonus`
+  - `+ policy.severity_weight[max_severity]`
+- `outage_signature`: first 12 lowercase hex chars of SHA1 over `"{service}|{start_ms}|{end_ms}|{','.join(source_incident_ids)}|{window_signature}|{max_severity}|{maintenance_span_count}|{policy_profile}"`
 - priority:
-  - `critical` if (`max_severity == "critical"` and `billable_duration_ms >= 280`) OR `billable_duration_ms >= 650` OR `critical_incident_count >= 2`
-  - `high` if `billable_duration_ms >= 320` OR (`incident_count >= 3` and `max_severity` in `{"major", "critical"}`) OR (`maintenance_overlap_ms == 0` and `duration_ms >= 450`)
+  - `critical` if (`max_severity == "critical"` and `billable_duration_ms >= policy.critical_p1_min_ms`) OR `billable_duration_ms >= policy.critical_threshold_ms` OR `critical_incident_count >= policy.critical_count_for_critical` OR `escalation_score >= policy.score_threshold_critical`
+  - `high` if `billable_duration_ms >= policy.high_threshold_ms` OR (`incident_count >= 3` and `max_severity` in `{"major", "critical"}`) OR (`maintenance_overlap_ms == 0` and `duration_ms >= policy.no_overlap_high_duration_ms`) OR `escalation_score >= policy.score_threshold_high`
   - else `medium`
-- sort order: priority rank (`critical > high > medium`), `billable_duration_ms` desc, `critical_incident_count` desc, `maintenance_span_count` desc, `incident_count` desc, `service` asc, `start_ms` asc
+- sort order: priority rank (`critical > high > medium`), `escalation_score` desc, `billable_duration_ms` desc, `critical_incident_count` desc, `maintenance_span_count` desc, `incident_count` desc, `service` asc, `start_ms` asc
 - JSONL must be compact (`json.dumps(row, separators=(",", ":"))`)
 
 Output contracts (exact keys):
@@ -62,9 +74,9 @@ Output contracts (exact keys):
 - each window must contain exactly:
   - `start_ms`, `end_ms`, `duration_ms`, `maintenance_overlap_ms`, `maintenance_span_count`, `billable_duration_ms`, `incident_count`, `critical_incident_count`, `source_incident_ids`, `max_severity`, `window_signature`
 - `incident_queue.jsonl` rows must contain exactly:
-  - `window_id`, `service`, `start_ms`, `end_ms`, `duration_ms`, `maintenance_overlap_ms`, `maintenance_span_count`, `billable_duration_ms`, `incident_count`, `critical_incident_count`, `source_incident_ids`, `max_severity`, `window_signature`, `priority`, `outage_signature`
+  - `window_id`, `service`, `start_ms`, `end_ms`, `duration_ms`, `maintenance_overlap_ms`, `maintenance_span_count`, `billable_duration_ms`, `incident_count`, `critical_incident_count`, `source_incident_ids`, `max_severity`, `window_signature`, `policy_profile`, `policy_queue_min_ms`, `escalation_score`, `priority`, `outage_signature`
 - `downtime_summary.json` must contain exactly:
-  - `schema_version`, `raw_incident_count`, `unique_incident_ids`, `canonical_incident_count`, `service_count`, `severity_counts`, `total_unplanned_downtime_ms`, `total_maintenance_overlap_ms`, `total_maintenance_span_count`, `total_billable_downtime_ms`, `longest_window_ms`, `queued_window_count`, `planned_excluded_count`, `critical_window_count`, `canonical_input_checksum`, `queue_signature_checksum`, `maintenance_compaction_checksum`
+  - `schema_version`, `raw_incident_count`, `unique_incident_ids`, `canonical_incident_count`, `service_count`, `severity_counts`, `total_unplanned_downtime_ms`, `total_maintenance_overlap_ms`, `total_maintenance_span_count`, `total_billable_downtime_ms`, `longest_window_ms`, `queued_window_count`, `priority_counts`, `max_escalation_score`, `planned_excluded_count`, `critical_window_count`, `canonical_input_checksum`, `queue_signature_checksum`, `maintenance_compaction_checksum`, `policy_checksum`
 
 Summary specifics:
 - `schema_version` is `"outage-windows-v1"`
@@ -73,5 +85,11 @@ Summary specifics:
 - `canonical_input_checksum`: SHA256 over canonical rows in canonical order (`service`, `start_ms`, `incident_id`) using line format `incident_id|service|start_ms|end_ms|severity|planned_int`, `planned_int` in `{0,1}`
 - `queue_signature_checksum`: lowercase SHA256 of `"|".join(outage_signature values in final queue order)`
 - `maintenance_compaction_checksum`: lowercase SHA256 over canonical merged maintenance windows in canonical order (`service`, `start_ms`, `end_ms`) using newline-joined line format `service|start_ms|end_ms`
+- `priority_counts` key order: `critical`, `high`, `medium`
+- `max_escalation_score`: max queue-row `escalation_score` (0 if queue empty)
+- `policy_checksum`: lowercase SHA256 over canonical policy lines in this order:
+  - default line first, then one line per overridden service sorted by service name
+  - each line format:
+    `profile|queue_min_effective_ms|critical_p1_min_ms|critical_threshold_ms|high_threshold_ms|no_overlap_high_duration_ms|critical_count_for_critical|no_overlap_bonus|segment_bonus|score_threshold_critical|score_threshold_high|weight_critical|weight_major|weight_minor`
 
 Keep `/app/workflow/.compile_outages.original` unchanged and do not read/import verifier artifacts from `/tests`.

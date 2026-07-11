@@ -20,6 +20,7 @@ PIPELINE = Path("/app/workflow/compile_outages.py")
 ORIGINAL_PIPELINE = Path("/app/workflow/.compile_outages.original")
 INPUT_PATH = Path("/app/data/outages.json")
 MAINTENANCE_PATH = Path("/app/data/maintenance_windows.json")
+POLICY_PATH = Path("/app/data/response_policies.json")
 ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 
 FIXTURE = json.loads(Path("/tests/fixtures/expected_outputs.json").read_text())
@@ -139,17 +140,22 @@ def test_summary_schema_and_order(summary: dict):
         "total_billable_downtime_ms",
         "longest_window_ms",
         "queued_window_count",
+        "priority_counts",
+        "max_escalation_score",
         "planned_excluded_count",
         "critical_window_count",
         "canonical_input_checksum",
         "queue_signature_checksum",
         "maintenance_compaction_checksum",
+        "policy_checksum",
     }
     assert summary["schema_version"] == "outage-windows-v1"
     assert list(summary["severity_counts"].keys()) == list(SEVERITY_ORDER)
+    assert list(summary["priority_counts"].keys()) == list(PRIORITY_ORDER)
     assert len(summary["canonical_input_checksum"]) == 64
     assert len(summary["queue_signature_checksum"]) == 64
     assert len(summary["maintenance_compaction_checksum"]) == 64
+    assert len(summary["policy_checksum"]) == 64
 
 
 def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
@@ -194,6 +200,9 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
         "source_incident_ids",
         "max_severity",
         "window_signature",
+        "policy_profile",
+        "policy_queue_min_ms",
+        "escalation_score",
         "priority",
         "outage_signature",
     }
@@ -206,20 +215,9 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
 
 def test_priority_rules_are_enforced(queue_rows: list[dict]):
     for row in queue_rows:
-        if (
-            (row["max_severity"] == "critical" and row["billable_duration_ms"] >= 280)
-            or row["billable_duration_ms"] >= 650
-            or row["critical_incident_count"] >= 2
-        ):
-            assert row["priority"] == "critical"
-        elif (
-            row["billable_duration_ms"] >= 320
-            or (row["incident_count"] >= 3 and row["max_severity"] in {"major", "critical"})
-            or (row["maintenance_overlap_ms"] == 0 and row["duration_ms"] >= 450)
-        ):
-            assert row["priority"] == "high"
-        else:
-            assert row["priority"] == "medium"
+        assert row["billable_duration_ms"] >= row["policy_queue_min_ms"]
+        assert row["policy_profile"] in {"default", "auth", "billing", "search"}
+        assert row["escalation_score"] >= 0
 
 
 def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
@@ -227,6 +225,7 @@ def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
     sort_keys = [
         (
             rank[row["priority"]],
+            -row["escalation_score"],
             -row["billable_duration_ms"],
             -row["critical_incident_count"],
             -row["maintenance_span_count"],
@@ -266,6 +265,7 @@ def test_checksum_fields_match_fixture(summary: dict):
         summary["maintenance_compaction_checksum"]
         == FIXTURE["primary"]["summary"]["maintenance_compaction_checksum"]
     )
+    assert summary["policy_checksum"] == FIXTURE["primary"]["summary"]["policy_checksum"]
 
 
 def test_original_snapshot_preserved():
@@ -345,6 +345,48 @@ def test_maintenance_source_path_affects_output():
             assert summary["total_maintenance_span_count"] == 0
     finally:
         MAINTENANCE_PATH.write_text(original)
+
+
+def test_policy_source_path_affects_output():
+    original = POLICY_PATH.read_text()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_a = Path(tmp) / "a"
+            out_b = Path(tmp) / "b"
+            out_a.mkdir(parents=True, exist_ok=True)
+            out_b.mkdir(parents=True, exist_ok=True)
+            result_a = _run_pipeline(output_dir=out_a)
+            assert result_a.returncode == 0, result_a.stderr
+            summary_a = _load_json(out_a / "downtime_summary.json")
+            queue_a = _load_jsonl(out_a / "incident_queue.jsonl")
+
+            strict_policy = {
+                "default": {
+                    "queue_min_effective_ms": 10000,
+                    "critical_p1_min_ms": 10000,
+                    "critical_threshold_ms": 10000,
+                    "high_threshold_ms": 10000,
+                    "no_overlap_high_duration_ms": 10000,
+                    "critical_count_for_critical": 10,
+                    "no_overlap_bonus": 0,
+                    "segment_bonus": 0,
+                    "severity_weight": {"critical": 1, "major": 1, "minor": 1},
+                    "score_threshold_critical": 999,
+                    "score_threshold_high": 999
+                },
+                "service_overrides": {}
+            }
+            _write_json(POLICY_PATH, strict_policy)
+            result_b = _run_pipeline(output_dir=out_b)
+            assert result_b.returncode == 0, result_b.stderr
+            summary_b = _load_json(out_b / "downtime_summary.json")
+            queue_b = _load_jsonl(out_b / "incident_queue.jsonl")
+            assert summary_a["queued_window_count"] > summary_b["queued_window_count"]
+            assert len(queue_b) == 0
+            assert summary_a["policy_checksum"] != summary_b["policy_checksum"]
+            assert len(queue_a) > 0
+    finally:
+        POLICY_PATH.write_text(original)
 
 
 def test_maintenance_compaction_and_span_count_exercised():

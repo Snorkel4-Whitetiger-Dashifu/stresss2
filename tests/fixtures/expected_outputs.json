@@ -19,11 +19,18 @@
       "total_billable_downtime_ms": 2210,
       "longest_window_ms": 660,
       "queued_window_count": 6,
+      "priority_counts": {
+        "critical": 2,
+        "high": 2,
+        "medium": 2
+      },
+      "max_escalation_score": 24,
       "planned_excluded_count": 2,
       "critical_window_count": 2,
       "canonical_input_checksum": "8df93636609c5ee51ca80cb503ce174156dbef710a7fdd0d0864e77bfe6fef0e",
-      "queue_signature_checksum": "01fae7db3d9589de1169f8ce0befa92209f0f738d9b83c51e81c0f002b6895fd",
-      "maintenance_compaction_checksum": "dd3320c1971e6fee556761fb4e7a5e2499caf7bb2125a0756642139b8776a657"
+      "queue_signature_checksum": "0c3e070e626eb571895184284480d4f23897caa80a5d9b8df71ad7030c2e50b1",
+      "maintenance_compaction_checksum": "dd3320c1971e6fee556761fb4e7a5e2499caf7bb2125a0756642139b8776a657",
+      "policy_checksum": "cf9066367efd3de8dbffebacb21d55787b1922a1ee9c031404f09a078077a9f4"
     },
     "windows": {
       "auth": [
@@ -126,8 +133,11 @@
         "source_incident_ids": ["a1", "a2", "a3"],
         "max_severity": "critical",
         "window_signature": "410608022f",
+        "policy_profile": "auth",
+        "policy_queue_min_ms": 240,
+        "escalation_score": 24,
         "priority": "critical",
-        "outage_signature": "2569fb6ae154"
+        "outage_signature": "bf2999f9c70b"
       },
       {
         "window_id": "search:600-1200",
@@ -143,8 +153,11 @@
         "source_incident_ids": ["s3", "s4"],
         "max_severity": "critical",
         "window_signature": "f66c4f42b0",
+        "policy_profile": "search",
+        "policy_queue_min_ms": 230,
+        "escalation_score": 21,
         "priority": "critical",
-        "outage_signature": "9ff1391d23ac"
+        "outage_signature": "afd228759700"
       },
       {
         "window_id": "billing:900-1300",
@@ -160,8 +173,11 @@
         "source_incident_ids": ["b3", "b4"],
         "max_severity": "major",
         "window_signature": "28966b8502",
+        "policy_profile": "billing",
+        "policy_queue_min_ms": 210,
+        "escalation_score": 15,
         "priority": "high",
-        "outage_signature": "bd21067332cd"
+        "outage_signature": "97b41223a998"
       },
       {
         "window_id": "billing:200-610",
@@ -177,8 +193,11 @@
         "source_incident_ids": ["b1", "b2"],
         "max_severity": "major",
         "window_signature": "9447d5a57a",
+        "policy_profile": "billing",
+        "policy_queue_min_ms": 210,
+        "escalation_score": 14,
         "priority": "high",
-        "outage_signature": "59887177f615"
+        "outage_signature": "005c8de81031"
       },
       {
         "window_id": "search:100-410",
@@ -194,8 +213,11 @@
         "source_incident_ids": ["s1", "s2"],
         "max_severity": "major",
         "window_signature": "dd76a0dcee",
+        "policy_profile": "search",
+        "policy_queue_min_ms": 230,
+        "escalation_score": 13,
         "priority": "medium",
-        "outage_signature": "f66392c04781"
+        "outage_signature": "b86d5f001b3d"
       },
       {
         "window_id": "auth:1100-1380",
@@ -211,8 +233,11 @@
         "source_incident_ids": ["a5"],
         "max_severity": "major",
         "window_signature": "da471ceee0",
+        "policy_profile": "auth",
+        "policy_queue_min_ms": 240,
+        "escalation_score": 10,
         "priority": "medium",
-        "outage_signature": "886c4a5dc05b"
+        "outage_signature": "0273d3fa4e78"
       }
     ]
   },
@@ -234,11 +259,18 @@
       "total_billable_downtime_ms": 1350,
       "longest_window_ms": 580,
       "queued_window_count": 3,
+      "priority_counts": {
+        "critical": 1,
+        "high": 2,
+        "medium": 0
+      },
+      "max_escalation_score": 20,
       "planned_excluded_count": 1,
       "critical_window_count": 1,
       "canonical_input_checksum": "937f40db724125c8ed784a7fad5f76810a363dfb9ce708976949176a28c8cce6",
-      "queue_signature_checksum": "18d92b3a07ed8e55d37ce0f7524a55e524b2928d0860734f0d2f323b73dd44a6",
-      "maintenance_compaction_checksum": "dd3320c1971e6fee556761fb4e7a5e2499caf7bb2125a0756642139b8776a657"
+      "queue_signature_checksum": "533dd97da081b499818f01441356d6af227eb76dc67a4dc6115ffe1148c1e4b0",
+      "maintenance_compaction_checksum": "dd3320c1971e6fee556761fb4e7a5e2499caf7bb2125a0756642139b8776a657",
+      "policy_checksum": "cf9066367efd3de8dbffebacb21d55787b1922a1ee9c031404f09a078077a9f4"
     },
     "windows": {
       "auth": [
@@ -302,8 +334,11 @@
         "source_incident_ids": ["x5", "x6"],
         "max_severity": "critical",
         "window_signature": "69f54e1a8d",
+        "policy_profile": "search",
+        "policy_queue_min_ms": 230,
+        "escalation_score": 20,
         "priority": "critical",
-        "outage_signature": "05be0fb48f17"
+        "outage_signature": "33a64dd2d994"
       },
       {
         "window_id": "billing:120-700",
@@ -319,8 +354,11 @@
         "source_incident_ids": ["x4"],
         "max_severity": "major",
         "window_signature": "4eca75c14c",
+        "policy_profile": "billing",
+        "policy_queue_min_ms": 210,
+        "escalation_score": 15,
         "priority": "high",
-        "outage_signature": "76fc2275656d"
+        "outage_signature": "6ac84f97abb6"
       },
       {
         "window_id": "auth:10-500",
@@ -336,8 +374,11 @@
         "source_incident_ids": ["x1", "x2"],
         "max_severity": "major",
         "window_signature": "28b239b92f",
+        "policy_profile": "auth",
+        "policy_queue_min_ms": 240,
+        "escalation_score": 15,
         "priority": "high",
-        "outage_signature": "a555a6d39fd1"
+        "outage_signature": "2e1cf0bf79aa"
       }
     ]
   }
