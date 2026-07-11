@@ -24,6 +24,7 @@ MAINTENANCE_PATH = Path("/app/data/maintenance_windows.json")
 POLICY_PATH = Path("/app/data/response_policies.json")
 EXCEPTIONS_PATH = Path("/app/data/routing_exceptions.json")
 HANDOFF_PATH = Path("/app/data/handoff_windows.json")
+BLACKOUT_PATH = Path("/app/data/blackout_windows.json")
 ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 
 FIXTURE = json.loads(Path("/tests/fixtures/expected_outputs.json").read_text())
@@ -165,14 +166,18 @@ def test_summary_schema_and_order(summary: dict):
         "total_boost_overlap_ms",
         "total_handoff_overlap_ms",
         "total_handoff_segment_count",
+        "total_blackout_overlap_ms",
+        "total_blackout_segment_count",
         "total_billable_downtime_ms",
         "total_adjusted_billable_downtime_ms",
+        "total_routed_billable_downtime_ms",
         "longest_window_ms",
         "queued_window_count",
         "priority_counts",
         "max_escalation_score",
         "max_exception_balance_score",
         "max_handoff_pressure_score",
+        "max_blackout_pressure_score",
         "planned_excluded_count",
         "critical_window_count",
         "canonical_input_checksum",
@@ -180,6 +185,7 @@ def test_summary_schema_and_order(summary: dict):
         "maintenance_compaction_checksum",
         "exception_compaction_checksum",
         "handoff_compaction_checksum",
+        "blackout_compaction_checksum",
         "queue_digest_checksum",
         "policy_checksum",
     }
@@ -191,6 +197,7 @@ def test_summary_schema_and_order(summary: dict):
     assert len(summary["maintenance_compaction_checksum"]) == 64
     assert len(summary["exception_compaction_checksum"]) == 64
     assert len(summary["handoff_compaction_checksum"]) == 64
+    assert len(summary["blackout_compaction_checksum"]) == 64
     assert len(summary["queue_digest_checksum"]) == 64
     assert len(summary["policy_checksum"]) == 64
 
@@ -208,6 +215,9 @@ def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
         "handoff_overlap_ms",
         "handoff_segment_count",
         "adjusted_billable_duration_ms",
+        "blackout_overlap_ms",
+        "blackout_segment_count",
+        "routed_billable_duration_ms",
         "incident_count",
         "critical_incident_count",
         "source_incident_ids",
@@ -228,6 +238,10 @@ def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
                 block["billable_duration_ms"] - (block["handoff_overlap_ms"] // 2),
                 0,
             )
+            assert block["routed_billable_duration_ms"] == max(
+                block["adjusted_billable_duration_ms"] - (block["blackout_overlap_ms"] // 3),
+                0,
+            )
             assert block["source_incident_ids"] == sorted(block["source_incident_ids"])
 
 
@@ -246,6 +260,9 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
         "handoff_overlap_ms",
         "handoff_segment_count",
         "adjusted_billable_duration_ms",
+        "blackout_overlap_ms",
+        "blackout_segment_count",
+        "routed_billable_duration_ms",
         "incident_count",
         "critical_incident_count",
         "source_incident_ids",
@@ -255,8 +272,10 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
         "policy_queue_min_ms",
         "effective_queue_min_ms",
         "adjusted_queue_min_ms",
+        "routed_queue_min_ms",
         "exception_balance_score",
         "handoff_pressure_score",
+        "blackout_pressure_score",
         "escalation_score",
         "priority",
         "outage_signature",
@@ -272,12 +291,14 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
 
 def test_priority_rules_are_enforced(queue_rows: list[dict]):
     for row in queue_rows:
-        assert row["adjusted_billable_duration_ms"] >= row["adjusted_queue_min_ms"]
+        assert row["routed_billable_duration_ms"] >= row["routed_queue_min_ms"]
+        assert row["routed_queue_min_ms"] >= row["adjusted_queue_min_ms"]
         assert row["adjusted_queue_min_ms"] >= row["effective_queue_min_ms"]
         assert row["effective_queue_min_ms"] >= 0
         assert row["policy_profile"] in {"default", "auth", "billing", "search"}
         assert isinstance(row["exception_balance_score"], int)
         assert isinstance(row["handoff_pressure_score"], int)
+        assert isinstance(row["blackout_pressure_score"], int)
 
 
 def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
@@ -287,7 +308,9 @@ def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
             rank[row["priority"]],
             -row["escalation_score"],
             -row["handoff_pressure_score"],
+            -row["blackout_pressure_score"],
             -row["exception_balance_score"],
+            -row["routed_billable_duration_ms"],
             -row["adjusted_billable_duration_ms"],
             -row["critical_incident_count"],
             -row["maintenance_span_count"],
@@ -319,9 +342,16 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
     total_handoff_segments = sum(
         b["handoff_segment_count"] for blocks in windows.values() for b in blocks
     )
+    total_blackout = sum(b["blackout_overlap_ms"] for blocks in windows.values() for b in blocks)
+    total_blackout_segments = sum(
+        b["blackout_segment_count"] for blocks in windows.values() for b in blocks
+    )
     total_billable = sum(b["billable_duration_ms"] for blocks in windows.values() for b in blocks)
     total_adjusted_billable = sum(
         b["adjusted_billable_duration_ms"] for blocks in windows.values() for b in blocks
+    )
+    total_routed_billable = sum(
+        b["routed_billable_duration_ms"] for blocks in windows.values() for b in blocks
     )
     assert summary["total_unplanned_downtime_ms"] == total_duration
     assert summary["total_maintenance_overlap_ms"] == total_overlap
@@ -330,8 +360,11 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
     assert summary["total_boost_overlap_ms"] == total_boost
     assert summary["total_handoff_overlap_ms"] == total_handoff
     assert summary["total_handoff_segment_count"] == total_handoff_segments
+    assert summary["total_blackout_overlap_ms"] == total_blackout
+    assert summary["total_blackout_segment_count"] == total_blackout_segments
     assert summary["total_billable_downtime_ms"] == total_billable
     assert summary["total_adjusted_billable_downtime_ms"] == total_adjusted_billable
+    assert summary["total_routed_billable_downtime_ms"] == total_routed_billable
 
 
 def test_checksum_fields_match_fixture(summary: dict):
@@ -340,6 +373,7 @@ def test_checksum_fields_match_fixture(summary: dict):
     assert len(summary["maintenance_compaction_checksum"]) == 64
     assert len(summary["exception_compaction_checksum"]) == 64
     assert len(summary["handoff_compaction_checksum"]) == 64
+    assert len(summary["blackout_compaction_checksum"]) == 64
     assert len(summary["queue_digest_checksum"]) == 64
     assert len(summary["policy_checksum"]) == 64
 
@@ -582,6 +616,36 @@ def test_handoff_source_path_affects_output():
         HANDOFF_PATH.write_text(original)
 
 
+def test_blackout_source_path_affects_output():
+    original = BLACKOUT_PATH.read_text()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_a = Path(tmp) / "a"
+            out_b = Path(tmp) / "b"
+            out_a.mkdir(parents=True, exist_ok=True)
+            out_b.mkdir(parents=True, exist_ok=True)
+            result_a = _run_pipeline(output_dir=out_a)
+            assert result_a.returncode == 0, result_a.stderr
+            summary_a = _load_json(out_a / "downtime_summary.json")
+            queue_a = _load_jsonl(out_a / "incident_queue.jsonl")
+
+            BLACKOUT_PATH.write_text("[]\n")
+            result_b = _run_pipeline(output_dir=out_b)
+            assert result_b.returncode == 0, result_b.stderr
+            summary_b = _load_json(out_b / "downtime_summary.json")
+            queue_b = _load_jsonl(out_b / "incident_queue.jsonl")
+            assert summary_a["blackout_compaction_checksum"] != summary_b["blackout_compaction_checksum"]
+            assert summary_a["total_blackout_overlap_ms"] != summary_b["total_blackout_overlap_ms"]
+            assert (
+                summary_a["total_routed_billable_downtime_ms"]
+                != summary_b["total_routed_billable_downtime_ms"]
+            )
+            assert summary_a["queue_digest_checksum"] != summary_b["queue_digest_checksum"]
+            assert queue_a != queue_b
+    finally:
+        BLACKOUT_PATH.write_text(original)
+
+
 def test_maintenance_compaction_and_span_count_exercised():
     original = MAINTENANCE_PATH.read_text()
     try:
@@ -773,12 +837,76 @@ def test_handoff_compaction_and_scope_exercised():
         HANDOFF_PATH.write_text(original_handoff)
 
 
+def test_blackout_compaction_and_scope_exercised():
+    original_maint = MAINTENANCE_PATH.read_text()
+    original_ex = EXCEPTIONS_PATH.read_text()
+    original_handoff = HANDOFF_PATH.read_text()
+    original_blackout = BLACKOUT_PATH.read_text()
+    try:
+        MAINTENANCE_PATH.write_text("[]\n")
+        EXCEPTIONS_PATH.write_text("[]\n")
+        HANDOFF_PATH.write_text("[]\n")
+        _write_json(
+            BLACKOUT_PATH,
+            [
+                {"service": "search-api", "severity_scope": "all", "start_ms": 120, "end_ms": 210},
+                {"service": "search", "severity_scope": "all", "start_ms": 210, "end_ms": 250},
+                {"service": "search", "severity_scope": "critical", "start_ms": 260, "end_ms": 320},
+                {"service": "search", "severity_scope": "debug", "start_ms": 0, "end_ms": 1},
+            ],
+        )
+        rows = [
+            {
+                "incident_id": "k1",
+                "service": "search",
+                "start_ms": 100,
+                "end_ms": 400,
+                "severity": "critical",
+                "planned": False,
+            },
+            {
+                "incident_id": "k2",
+                "service": "search",
+                "start_ms": 500,
+                "end_ms": 760,
+                "severity": "major",
+                "planned": False,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            in_path = Path(tmp) / "in.json"
+            out = Path(tmp) / "out"
+            _write_json(in_path, rows)
+            out.mkdir(parents=True, exist_ok=True)
+            result = _run_pipeline(input_path=in_path, output_dir=out)
+            assert result.returncode == 0, result.stderr
+            windows = _load_json(out / "service_windows.json")
+            queue = _load_jsonl(out / "incident_queue.jsonl")
+            summary = _load_json(out / "downtime_summary.json")
+            first = windows["search"][0]
+            second = windows["search"][1]
+            assert first["blackout_overlap_ms"] == 190
+            assert first["blackout_segment_count"] == 2
+            assert first["routed_billable_duration_ms"] == 237
+            assert second["blackout_overlap_ms"] == 0
+            assert summary["total_blackout_overlap_ms"] == 190
+            assert summary["total_blackout_segment_count"] == 2
+            assert all("blackout_pressure_score" in row for row in queue)
+    finally:
+        MAINTENANCE_PATH.write_text(original_maint)
+        EXCEPTIONS_PATH.write_text(original_ex)
+        HANDOFF_PATH.write_text(original_handoff)
+        BLACKOUT_PATH.write_text(original_blackout)
+
+
 def test_effective_queue_threshold_uses_exception_units_and_ceil_suppress():
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()
     original_policy = POLICY_PATH.read_text()
+    original_blackout = BLACKOUT_PATH.read_text()
     try:
         MAINTENANCE_PATH.write_text("[]\n")
+        BLACKOUT_PATH.write_text("[]\n")
         _write_json(
             EXCEPTIONS_PATH,
             [
@@ -834,10 +962,12 @@ def test_effective_queue_threshold_uses_exception_units_and_ceil_suppress():
             row = queue[0]
             assert row["effective_queue_min_ms"] == 290
             assert row["adjusted_queue_min_ms"] == 290
+            assert row["routed_queue_min_ms"] == 290
             assert row["exception_balance_score"] == 1
             assert row["priority"] == "high"
     finally:
         MAINTENANCE_PATH.write_text(original_maint)
         EXCEPTIONS_PATH.write_text(original_ex)
         POLICY_PATH.write_text(original_policy)
+        BLACKOUT_PATH.write_text(original_blackout)
 

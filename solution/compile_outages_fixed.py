@@ -15,6 +15,7 @@ MAINTENANCE_PATH = Path("/app/data/maintenance_windows.json")
 POLICY_PATH = Path("/app/data/response_policies.json")
 EXCEPTIONS_PATH = Path("/app/data/routing_exceptions.json")
 HANDOFF_PATH = Path("/app/data/handoff_windows.json")
+BLACKOUT_PATH = Path("/app/data/blackout_windows.json")
 SERVICE_ALIASES = {
     "authentication": "auth",
     "payments": "billing",
@@ -43,6 +44,10 @@ DEFAULT_POLICY = {
     "handoff_unit_ms": 60,
     "handoff_force_critical_ms": 150,
     "handoff_high_relief_ms": 50,
+    "blackout_penalty_ms": 45,
+    "blackout_unit_ms": 70,
+    "blackout_force_critical_ms": 200,
+    "blackout_high_relief_ms": 55,
 }
 
 
@@ -63,6 +68,10 @@ def load_exceptions(path: Path = EXCEPTIONS_PATH) -> list[dict]:
 
 
 def load_handoffs(path: Path = HANDOFF_PATH) -> list[dict]:
+    return json.loads(path.read_text())
+
+
+def load_blackouts(path: Path = BLACKOUT_PATH) -> list[dict]:
     return json.loads(path.read_text())
 
 
@@ -96,6 +105,11 @@ def normalize_handoff_scope(value: object) -> str:
     return scope if scope in {"all", "major", "critical"} else ""
 
 
+def normalize_blackout_scope(value: object) -> str:
+    scope = str(value if value is not None else "").strip().lower()
+    return scope if scope in {"all", "major", "critical"} else ""
+
+
 def _normalize_policy(raw_policy: dict | None) -> dict:
     raw_policy = raw_policy or {}
     normalized = dict(DEFAULT_POLICY)
@@ -121,6 +135,10 @@ def _normalize_policy(raw_policy: dict | None) -> dict:
         "handoff_unit_ms",
         "handoff_force_critical_ms",
         "handoff_high_relief_ms",
+        "blackout_penalty_ms",
+        "blackout_unit_ms",
+        "blackout_force_critical_ms",
+        "blackout_high_relief_ms",
     ):
         if key in raw_policy:
             normalized[key] = normalize_ms(raw_policy.get(key))
@@ -163,6 +181,8 @@ def _policy_checksum(policy_data: dict) -> str:
         "{suppress_unit_ms}|{boost_unit_ms}|{min_queue_floor_ms}|"
         "{boost_force_critical_ms}|{boost_high_relief_ms}|{handoff_penalty_ms}|"
         "{handoff_unit_ms}|{handoff_force_critical_ms}|{handoff_high_relief_ms}|"
+        "{blackout_penalty_ms}|{blackout_unit_ms}|{blackout_force_critical_ms}|"
+        "{blackout_high_relief_ms}|"
         "{critical}|{major}|{minor}".format(
             **default_policy, **default_policy["severity_weight"]
         )
@@ -179,6 +199,8 @@ def _policy_checksum(policy_data: dict) -> str:
                 "{suppress_unit_ms}|{boost_unit_ms}|{min_queue_floor_ms}|"
                 "{boost_force_critical_ms}|{boost_high_relief_ms}|{handoff_penalty_ms}|"
                 "{handoff_unit_ms}|{handoff_force_critical_ms}|{handoff_high_relief_ms}|"
+                "{blackout_penalty_ms}|{blackout_unit_ms}|{blackout_force_critical_ms}|"
+                "{blackout_high_relief_ms}|"
                 "{critical}|{major}|{minor}".format(
                     profile=profile, **policy, **policy["severity_weight"]
                 )
@@ -325,6 +347,26 @@ def handoffs_by_service_scope(
     }
 
 
+def blackouts_by_service_scope(
+    blackout_rows: list[dict],
+) -> dict[tuple[str, str], list[tuple[int, int]]]:
+    by_key: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    for row in blackout_rows:
+        service = normalize_service(row.get("service", ""))
+        scope = normalize_blackout_scope(row.get("severity_scope", ""))
+        if not scope:
+            continue
+        start = normalize_ms(row.get("start_ms", 0))
+        end = normalize_ms(row.get("end_ms", 0))
+        if end <= start:
+            continue
+        by_key.setdefault((service, scope), []).append((start, end))
+    return {
+        key: _compact_intervals(intervals)
+        for key, intervals in by_key.items()
+    }
+
+
 def _intervals_intersection_ms(
     intervals_a: list[tuple[int, int]], intervals_b: list[tuple[int, int]]
 ) -> int:
@@ -350,11 +392,13 @@ def merge_windows(
     maintenance_rows: list[dict],
     exception_rows: list[dict],
     handoff_rows: list[dict],
+    blackout_rows: list[dict],
 ) -> tuple[
     dict[str, list[dict]],
     int,
     dict[str, list[tuple[int, int]]],
     dict[str, dict[str, list[tuple[int, int]]]],
+    dict[tuple[str, str], list[tuple[int, int]]],
     dict[tuple[str, str], list[tuple[int, int]]],
 ]:
     by_service: dict[str, list[dict]] = {}
@@ -368,6 +412,7 @@ def merge_windows(
     maintenance = maintenance_by_service(maintenance_rows)
     exceptions = exceptions_by_service(exception_rows)
     handoffs = handoffs_by_service_scope(handoff_rows)
+    blackouts = blackouts_by_service_scope(blackout_rows)
     windows: dict[str, list[dict]] = {}
     for service in sorted(by_service):
         rows = sorted(by_service[service], key=lambda row: row["start_ms"])
@@ -463,23 +508,45 @@ def merge_windows(
                 block["billable_duration_ms"] - (block["handoff_overlap_ms"] // 2),
                 0,
             )
+            blackout_spans = _window_overlap_spans(
+                block["start_ms"],
+                block["end_ms"],
+                blackouts.get((service, "all"), []),
+            )
+            blackout_spans.extend(
+                _window_overlap_spans(
+                    block["start_ms"],
+                    block["end_ms"],
+                    blackouts.get((service, block["max_severity"]), []),
+                )
+            )
+            compacted_blackout_spans = _compact_intervals(blackout_spans)
+            block["blackout_overlap_ms"] = sum(
+                span_end - span_start for span_start, span_end in compacted_blackout_spans
+            )
+            block["blackout_segment_count"] = len(compacted_blackout_spans)
+            block["routed_billable_duration_ms"] = max(
+                block["adjusted_billable_duration_ms"] - (block["blackout_overlap_ms"] // 3),
+                0,
+            )
             block["window_signature"] = hashlib.sha1(
                 (
                     f"{service}|{block['start_ms']}|{block['end_ms']}|"
                     f"{','.join(block['source_incident_ids'])}|{block['max_severity']}|"
-                    f"{block['handoff_segment_count']}"
+                    f"{block['handoff_segment_count']}|{block['blackout_segment_count']}"
                 ).encode("utf-8")
             ).hexdigest()[:10]
 
         windows[service] = merged
 
-    return windows, planned_excluded_count, maintenance, exceptions, handoffs
+    return windows, planned_excluded_count, maintenance, exceptions, handoffs, blackouts
 
 
 def build_queue(
     windows: dict[str, list[dict]],
     policy_data: dict,
     handoffs: dict[tuple[str, str], list[tuple[int, int]]],
+    blackouts: dict[tuple[str, str], list[tuple[int, int]]],
 ) -> list[dict]:
     rows: list[dict] = []
     for service, blocks in windows.items():
@@ -488,6 +555,7 @@ def build_queue(
             suppress_unit = max(policy["suppress_unit_ms"], 1)
             boost_unit = max(policy["boost_unit_ms"], 1)
             handoff_unit = max(policy["handoff_unit_ms"], 1)
+            blackout_unit = max(policy["blackout_unit_ms"], 1)
             suppress_units = (
                 (block["suppression_overlap_ms"] + suppress_unit - 1) // suppress_unit
                 if block["suppression_overlap_ms"] > 0
@@ -505,7 +573,12 @@ def build_queue(
                 effective_queue_min_ms
                 + handoff_units * policy["handoff_penalty_ms"]
             )
-            if block["adjusted_billable_duration_ms"] < adjusted_queue_min_ms:
+            blackout_units = block["blackout_overlap_ms"] // blackout_unit
+            routed_queue_min_ms = (
+                adjusted_queue_min_ms
+                + blackout_units * policy["blackout_penalty_ms"]
+            )
+            if block["routed_billable_duration_ms"] < routed_queue_min_ms:
                 continue
 
             all_probe_ms = _probe_overlap_ms(
@@ -521,6 +594,21 @@ def build_queue(
                 + (severity_probe_ms // 20)
                 + block["handoff_segment_count"]
             )
+            blackout_all_probe_ms = _probe_overlap_ms(
+                block["end_ms"],
+                blackouts.get((service, "all"), []),
+                lookback_ms=240,
+            )
+            blackout_severity_probe_ms = _probe_overlap_ms(
+                block["end_ms"],
+                blackouts.get((service, block["max_severity"]), []),
+                lookback_ms=240,
+            )
+            blackout_pressure_score = (
+                (blackout_all_probe_ms // 36)
+                + (blackout_severity_probe_ms // 24)
+                + block["blackout_segment_count"]
+            )
 
             exception_balance_score = int(boost_units - suppress_units)
             severity_weight = policy["severity_weight"].get(block["max_severity"], 0)
@@ -533,21 +621,23 @@ def build_queue(
                 + severity_weight
                 + exception_balance_score * 2
                 + handoff_pressure_score * 2
+                + blackout_pressure_score * 2
             )
             if (
                 (
                     block["max_severity"] == "critical"
-                    and block["adjusted_billable_duration_ms"] >= policy["critical_p1_min_ms"]
+                    and block["routed_billable_duration_ms"] >= policy["critical_p1_min_ms"]
                 )
-                or block["adjusted_billable_duration_ms"] >= policy["critical_threshold_ms"]
+                or block["routed_billable_duration_ms"] >= policy["critical_threshold_ms"]
                 or block["critical_incident_count"] >= policy["critical_count_for_critical"]
                 or escalation_score >= policy["score_threshold_critical"]
                 or block["boost_overlap_ms"] >= policy["boost_force_critical_ms"]
                 or block["handoff_overlap_ms"] >= policy["handoff_force_critical_ms"]
+                or block["blackout_overlap_ms"] >= policy["blackout_force_critical_ms"]
             ):
                 priority = "critical"
             elif (
-                block["adjusted_billable_duration_ms"] >= policy["high_threshold_ms"]
+                block["routed_billable_duration_ms"] >= policy["high_threshold_ms"]
                 or (block["incident_count"] >= 3 and block["max_severity"] in {"major", "critical"})
                 or (
                     block["maintenance_overlap_ms"] == 0
@@ -556,13 +646,18 @@ def build_queue(
                 or escalation_score >= policy["score_threshold_high"]
                 or (
                     exception_balance_score > 0
-                    and block["adjusted_billable_duration_ms"]
+                    and block["routed_billable_duration_ms"]
                     >= max(policy["high_threshold_ms"] - policy["boost_high_relief_ms"], 0)
                 )
                 or (
                     handoff_pressure_score > 0
-                    and block["adjusted_billable_duration_ms"]
+                    and block["routed_billable_duration_ms"]
                     >= max(policy["high_threshold_ms"] - policy["handoff_high_relief_ms"], 0)
+                )
+                or (
+                    blackout_pressure_score > 0
+                    and block["routed_billable_duration_ms"]
+                    >= max(policy["high_threshold_ms"] - policy["blackout_high_relief_ms"], 0)
                 )
             ):
                 priority = "high"
@@ -576,13 +671,15 @@ def build_queue(
                     f"{block['maintenance_span_count']}|{policy_profile}|"
                     f"{block['suppression_overlap_ms']}|{block['boost_overlap_ms']}|"
                     f"{effective_queue_min_ms}|{adjusted_queue_min_ms}|"
-                    f"{block['handoff_overlap_ms']}|{handoff_pressure_score}|{exception_balance_score}"
+                    f"{block['handoff_overlap_ms']}|{handoff_pressure_score}|"
+                    f"{block['blackout_overlap_ms']}|{blackout_pressure_score}|"
+                    f"{routed_queue_min_ms}|{exception_balance_score}"
                 ).encode("utf-8")
             ).hexdigest()[:12]
             queue_digest = hashlib.sha1(
                 (
                     f"{service}:{block['start_ms']}-{block['end_ms']}|{priority}|"
-                    f"{escalation_score}|{handoff_pressure_score}"
+                    f"{escalation_score}|{handoff_pressure_score}|{blackout_pressure_score}"
                 ).encode("utf-8")
             ).hexdigest()[:10]
             rows.append(
@@ -600,6 +697,9 @@ def build_queue(
                     "handoff_overlap_ms": block["handoff_overlap_ms"],
                     "handoff_segment_count": block["handoff_segment_count"],
                     "adjusted_billable_duration_ms": block["adjusted_billable_duration_ms"],
+                    "blackout_overlap_ms": block["blackout_overlap_ms"],
+                    "blackout_segment_count": block["blackout_segment_count"],
+                    "routed_billable_duration_ms": block["routed_billable_duration_ms"],
                     "incident_count": block["incident_count"],
                     "critical_incident_count": block["critical_incident_count"],
                     "source_incident_ids": block["source_incident_ids"],
@@ -609,8 +709,10 @@ def build_queue(
                     "policy_queue_min_ms": policy["queue_min_effective_ms"],
                     "effective_queue_min_ms": effective_queue_min_ms,
                     "adjusted_queue_min_ms": adjusted_queue_min_ms,
+                    "routed_queue_min_ms": routed_queue_min_ms,
                     "exception_balance_score": exception_balance_score,
                     "handoff_pressure_score": handoff_pressure_score,
+                    "blackout_pressure_score": blackout_pressure_score,
                     "escalation_score": escalation_score,
                     "priority": priority,
                     "outage_signature": signature,
@@ -624,7 +726,9 @@ def build_queue(
             rank[row["priority"]],
             -row["escalation_score"],
             -row["handoff_pressure_score"],
+            -row["blackout_pressure_score"],
             -row["exception_balance_score"],
+            -row["routed_billable_duration_ms"],
             -row["adjusted_billable_duration_ms"],
             -row["critical_incident_count"],
             -row["maintenance_span_count"],
@@ -642,6 +746,7 @@ def build_summary(
     maintenance: dict[str, list[tuple[int, int]]],
     exceptions: dict[str, dict[str, list[tuple[int, int]]]],
     handoffs: dict[tuple[str, str], list[tuple[int, int]]],
+    blackouts: dict[tuple[str, str], list[tuple[int, int]]],
     policy_data: dict,
     windows: dict[str, list[dict]],
     queue: list[dict],
@@ -670,11 +775,22 @@ def build_summary(
     total_handoff_segments = sum(
         block["handoff_segment_count"] for blocks in windows.values() for block in blocks
     )
+    total_blackout_overlap = sum(
+        block["blackout_overlap_ms"] for blocks in windows.values() for block in blocks
+    )
+    total_blackout_segments = sum(
+        block["blackout_segment_count"] for blocks in windows.values() for block in blocks
+    )
     total_billable = sum(
         block["billable_duration_ms"] for blocks in windows.values() for block in blocks
     )
     total_adjusted_billable = sum(
         block["adjusted_billable_duration_ms"]
+        for blocks in windows.values()
+        for block in blocks
+    )
+    total_routed_billable = sum(
+        block["routed_billable_duration_ms"]
         for blocks in windows.values()
         for block in blocks
     )
@@ -695,6 +811,10 @@ def build_summary(
     )
     max_handoff_pressure_score = max(
         (row["handoff_pressure_score"] for row in queue),
+        default=0,
+    )
+    max_blackout_pressure_score = max(
+        (row["blackout_pressure_score"] for row in queue),
         default=0,
     )
     canonical_input_checksum = hashlib.sha256(
@@ -731,6 +851,13 @@ def build_summary(
             for start, end in handoffs[(service, scope)]
         ).encode("utf-8")
     ).hexdigest()
+    blackout_compaction_checksum = hashlib.sha256(
+        "\n".join(
+            f"{service}|{scope}|{start}|{end}"
+            for service, scope in sorted(blackouts)
+            for start, end in blackouts[(service, scope)]
+        ).encode("utf-8")
+    ).hexdigest()
     queue_digest_checksum = hashlib.sha256(
         "|".join(row["queue_digest"] for row in queue).encode("utf-8")
     ).hexdigest()
@@ -750,14 +877,18 @@ def build_summary(
         "total_boost_overlap_ms": total_boost_overlap,
         "total_handoff_overlap_ms": total_handoff_overlap,
         "total_handoff_segment_count": total_handoff_segments,
+        "total_blackout_overlap_ms": total_blackout_overlap,
+        "total_blackout_segment_count": total_blackout_segments,
         "total_billable_downtime_ms": total_billable,
         "total_adjusted_billable_downtime_ms": total_adjusted_billable,
+        "total_routed_billable_downtime_ms": total_routed_billable,
         "longest_window_ms": longest_window,
         "queued_window_count": len(queue),
         "priority_counts": priority_counts,
         "max_escalation_score": max_escalation_score,
         "max_exception_balance_score": max_exception_balance_score,
         "max_handoff_pressure_score": max_handoff_pressure_score,
+        "max_blackout_pressure_score": max_blackout_pressure_score,
         "planned_excluded_count": planned_excluded_count,
         "critical_window_count": critical_window_count,
         "canonical_input_checksum": canonical_input_checksum,
@@ -765,6 +896,7 @@ def build_summary(
         "maintenance_compaction_checksum": maintenance_compaction_checksum,
         "exception_compaction_checksum": exception_compaction_checksum,
         "handoff_compaction_checksum": handoff_compaction_checksum,
+        "blackout_compaction_checksum": blackout_compaction_checksum,
         "queue_digest_checksum": queue_digest_checksum,
         "policy_checksum": policy_checksum,
     }
@@ -789,21 +921,24 @@ def compile_outages(input_path: Path, output_dir: Path) -> None:
     maintenance_rows = load_maintenance()
     exception_rows = load_exceptions()
     handoff_rows = load_handoffs()
+    blackout_rows = load_blackouts()
     policy_data = load_policies()
     canonical_rows = canonicalize(raw_rows)
-    windows, planned_excluded_count, maintenance, exceptions, handoffs = merge_windows(
+    windows, planned_excluded_count, maintenance, exceptions, handoffs, blackouts = merge_windows(
         canonical_rows,
         maintenance_rows,
         exception_rows,
         handoff_rows,
+        blackout_rows,
     )
-    queue = build_queue(windows, policy_data, handoffs)
+    queue = build_queue(windows, policy_data, handoffs, blackouts)
     summary = build_summary(
         raw_rows=raw_rows,
         canonical_rows=canonical_rows,
         maintenance=maintenance,
         exceptions=exceptions,
         handoffs=handoffs,
+        blackouts=blackouts,
         policy_data=policy_data,
         windows=windows,
         queue=queue,
