@@ -16,7 +16,7 @@
       "total_unplanned_downtime_ms": 2660,
       "total_maintenance_overlap_ms": 450,
       "total_maintenance_span_count": 9,
-      "total_suppression_overlap_ms": 370,
+      "total_suppression_overlap_ms": 330,
       "total_boost_overlap_ms": 290,
       "total_billable_downtime_ms": 2210,
       "longest_window_ms": 660,
@@ -26,12 +26,12 @@
         "high": 2,
         "medium": 2
       },
-      "max_escalation_score": 24,
+      "max_escalation_score": 23,
       "max_exception_balance_score": 1,
       "planned_excluded_count": 2,
       "critical_window_count": 2,
       "canonical_input_checksum": "8df93636609c5ee51ca80cb503ce174156dbef710a7fdd0d0864e77bfe6fef0e",
-      "queue_signature_checksum": "382bf15eeaaebbebbd022220b28f29152a9f74ca81299acf27fd8802dd378d5c",
+      "queue_signature_checksum": "e65f666885e139bee6d783ea762eff7c8486f1ffdd3b28d129c6898f00af01f9",
       "maintenance_compaction_checksum": "dd3320c1971e6fee556761fb4e7a5e2499caf7bb2125a0756642139b8776a657",
       "exception_compaction_checksum": "34783a37b3f8cb31915ef174e81c06444a3fc28c7d1a0c39548523c8feeaa72d",
       "policy_checksum": "6dfa895a7ddd16ab7acf4434432216cf6cb833f24218d02c5968c53fd87d4a65"
@@ -146,13 +146,40 @@
           "maintenance_overlap_ms": 160,
           "maintenance_span_count": 2,
           "billable_duration_ms": 440,
-          "suppression_overlap_ms": 80,
+          "suppression_overlap_ms": 40,
           "boost_overlap_ms": 100,
           "window_signature": "f66c4f42b0"
         }
       ]
     },
     "queue_rows": [
+      {
+        "window_id": "search:600-1200",
+        "service": "search",
+        "start_ms": 600,
+        "end_ms": 1200,
+        "duration_ms": 600,
+        "maintenance_overlap_ms": 160,
+        "maintenance_span_count": 2,
+        "suppression_overlap_ms": 40,
+        "boost_overlap_ms": 100,
+        "billable_duration_ms": 440,
+        "incident_count": 2,
+        "critical_incident_count": 1,
+        "source_incident_ids": [
+          "s3",
+          "s4"
+        ],
+        "max_severity": "critical",
+        "window_signature": "f66c4f42b0",
+        "policy_profile": "search",
+        "policy_queue_min_ms": 230,
+        "effective_queue_min_ms": 210,
+        "exception_balance_score": 1,
+        "escalation_score": 23,
+        "priority": "critical",
+        "outage_signature": "fc36e75366b3"
+      },
       {
         "window_id": "auth:100-760",
         "service": "auth",
@@ -175,38 +202,11 @@
         "window_signature": "410608022f",
         "policy_profile": "auth",
         "policy_queue_min_ms": 240,
-        "effective_queue_min_ms": 250,
-        "exception_balance_score": 0,
-        "escalation_score": 24,
+        "effective_queue_min_ms": 290,
+        "exception_balance_score": -1,
+        "escalation_score": 22,
         "priority": "critical",
-        "outage_signature": "22800e70b2ef"
-      },
-      {
-        "window_id": "search:600-1200",
-        "service": "search",
-        "start_ms": 600,
-        "end_ms": 1200,
-        "duration_ms": 600,
-        "maintenance_overlap_ms": 160,
-        "maintenance_span_count": 2,
-        "suppression_overlap_ms": 80,
-        "boost_overlap_ms": 100,
-        "billable_duration_ms": 440,
-        "incident_count": 2,
-        "critical_incident_count": 1,
-        "source_incident_ids": [
-          "s3",
-          "s4"
-        ],
-        "max_severity": "critical",
-        "window_signature": "f66c4f42b0",
-        "policy_profile": "search",
-        "policy_queue_min_ms": 230,
-        "effective_queue_min_ms": 250,
-        "exception_balance_score": 0,
-        "escalation_score": 21,
-        "priority": "critical",
-        "outage_signature": "1ffc8b72587f"
+        "outage_signature": "05b3943316ae"
       },
       {
         "window_id": "billing:200-610",
@@ -332,7 +332,7 @@
       "total_unplanned_downtime_ms": 1590,
       "total_maintenance_overlap_ms": 240,
       "total_maintenance_span_count": 4,
-      "total_suppression_overlap_ms": 220,
+      "total_suppression_overlap_ms": 180,
       "total_boost_overlap_ms": 190,
       "total_billable_downtime_ms": 1350,
       "longest_window_ms": 580,
@@ -342,12 +342,12 @@
         "high": 2,
         "medium": 0
       },
-      "max_escalation_score": 20,
+      "max_escalation_score": 22,
       "max_exception_balance_score": 1,
       "planned_excluded_count": 1,
       "critical_window_count": 1,
       "canonical_input_checksum": "937f40db724125c8ed784a7fad5f76810a363dfb9ce708976949176a28c8cce6",
-      "queue_signature_checksum": "f4729100bacd9a8d76b67c0ba476200102405ea8a4a9dc912b79eb082cfc28de",
+      "queue_signature_checksum": "7a463623d89d8b9f161b78323320b0567706ebd02053543e45129abb02de3041",
       "maintenance_compaction_checksum": "dd3320c1971e6fee556761fb4e7a5e2499caf7bb2125a0756642139b8776a657",
       "exception_compaction_checksum": "34783a37b3f8cb31915ef174e81c06444a3fc28c7d1a0c39548523c8feeaa72d",
       "policy_checksum": "6dfa895a7ddd16ab7acf4434432216cf6cb833f24218d02c5968c53fd87d4a65"
@@ -407,7 +407,7 @@
           "maintenance_overlap_ms": 110,
           "maintenance_span_count": 2,
           "billable_duration_ms": 410,
-          "suppression_overlap_ms": 80,
+          "suppression_overlap_ms": 40,
           "boost_overlap_ms": 100,
           "window_signature": "69f54e1a8d"
         }
@@ -422,7 +422,7 @@
         "duration_ms": 520,
         "maintenance_overlap_ms": 110,
         "maintenance_span_count": 2,
-        "suppression_overlap_ms": 80,
+        "suppression_overlap_ms": 40,
         "boost_overlap_ms": 100,
         "billable_duration_ms": 410,
         "incident_count": 2,
@@ -435,11 +435,11 @@
         "window_signature": "69f54e1a8d",
         "policy_profile": "search",
         "policy_queue_min_ms": 230,
-        "effective_queue_min_ms": 250,
-        "exception_balance_score": 0,
-        "escalation_score": 20,
+        "effective_queue_min_ms": 210,
+        "exception_balance_score": 1,
+        "escalation_score": 22,
         "priority": "critical",
-        "outage_signature": "353be673f9b9"
+        "outage_signature": "156c1b3c8d2d"
       },
       {
         "window_id": "billing:120-700",
@@ -488,11 +488,11 @@
         "window_signature": "28b239b92f",
         "policy_profile": "auth",
         "policy_queue_min_ms": 240,
-        "effective_queue_min_ms": 320,
-        "exception_balance_score": -2,
-        "escalation_score": 11,
+        "effective_queue_min_ms": 360,
+        "exception_balance_score": -3,
+        "escalation_score": 9,
         "priority": "high",
-        "outage_signature": "c14ed570a89d"
+        "outage_signature": "bc66d1e0d15a"
       }
     ]
   }

@@ -545,7 +545,7 @@ def test_exception_compaction_and_balance_exercised():
                 "incident_id": "e1",
                 "service": "search",
                 "start_ms": 90,
-                "end_ms": 300,
+                "end_ms": 360,
                 "severity": "major",
                 "planned": False,
             }
@@ -561,15 +561,15 @@ def test_exception_compaction_and_balance_exercised():
             queue = _load_jsonl(out / "incident_queue.jsonl")
             block = windows["search"][0]
             assert block["boost_overlap_ms"] == 120
-            assert block["suppression_overlap_ms"] == 70
-            assert queue[0]["effective_queue_min_ms"] == 180
-            assert queue[0]["exception_balance_score"] == 2
+            assert block["suppression_overlap_ms"] == 60
+            assert queue[0]["effective_queue_min_ms"] == 220
+            assert queue[0]["exception_balance_score"] == 1
     finally:
         MAINTENANCE_PATH.write_text(original_maint)
         EXCEPTIONS_PATH.write_text(original_ex)
 
 
-def test_effective_queue_threshold_uses_exception_units_and_floor():
+def test_effective_queue_threshold_uses_exception_units_and_ceil_suppress():
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()
     original_policy = POLICY_PATH.read_text()

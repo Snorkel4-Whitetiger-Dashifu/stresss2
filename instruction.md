@@ -55,8 +55,8 @@ Processing requirements:
      - compact per `(service, action)` by merging overlapping or touching intervals (`next.start_ms <= current.end_ms`)
    - same-service overlap only
    - per window compute:
-     - `suppression_overlap_ms`: total overlap against compacted `suppress` intervals
-     - `boost_overlap_ms`: total overlap against compacted `boost` intervals
+    - `suppression_overlap_ms`: total overlap against compacted `suppress` intervals, except any intersection with boost intervals is assigned to boost (boost precedence)
+    - `boost_overlap_ms`: total overlap against compacted `boost` intervals (includes boost-precedence intersections)
 
 Queue behavior:
 - resolve policy per normalized service from `/app/data/response_policies.json`:
@@ -64,12 +64,30 @@ Queue behavior:
   - numeric policy fields are int-coerced; missing override fields inherit from default
   - the `default` profile is authoritative and must include:
     `queue_min_effective_ms`, `critical_p1_min_ms`, `critical_threshold_ms`, `high_threshold_ms`, `no_overlap_high_duration_ms`, `critical_count_for_critical`, `no_overlap_bonus`, `segment_bonus`, `score_threshold_critical`, `score_threshold_high`, and `severity_weight`
-  - if `critical_p1_min_ms` is absent in a malformed policy file, treat it as `280` for robustness
+  - if fields are missing in malformed policy input, apply these defaults before service overrides:
+    - `queue_min_effective_ms=220`
+    - `critical_p1_min_ms=280`
+    - `critical_threshold_ms=650`
+    - `high_threshold_ms=320`
+    - `no_overlap_high_duration_ms=450`
+    - `critical_count_for_critical=2`
+    - `no_overlap_bonus=4`
+    - `segment_bonus=1`
+    - `score_threshold_critical=34`
+    - `score_threshold_high=18`
+    - `suppress_penalty_ms=40`
+    - `boost_credit_ms=30`
+    - `suppress_unit_ms=50`
+    - `boost_unit_ms=50`
+    - `min_queue_floor_ms=120`
+    - `boost_force_critical_ms=140`
+    - `boost_high_relief_ms=40`
+    - `severity_weight={"critical":5,"major":3,"minor":1}`
   - severity weights are merged key-wise (`critical`, `major`, `minor`)
 - additional integer policy fields:
   - `suppress_penalty_ms`, `boost_credit_ms`, `suppress_unit_ms`, `boost_unit_ms`, `min_queue_floor_ms`, `boost_force_critical_ms`, `boost_high_relief_ms`
 - define:
-  - `suppress_units = suppression_overlap_ms // max(policy.suppress_unit_ms, 1)`
+  - `suppress_units = 0` when `suppression_overlap_ms == 0`, else `ceil(suppression_overlap_ms / max(policy.suppress_unit_ms, 1))`
   - `boost_units = boost_overlap_ms // max(policy.boost_unit_ms, 1)`
   - `effective_queue_min_ms = max(policy.queue_min_effective_ms + suppress_units * policy.suppress_penalty_ms - boost_units * policy.boost_credit_ms, policy.min_queue_floor_ms)`
 - include windows when `billable_duration_ms >= effective_queue_min_ms`

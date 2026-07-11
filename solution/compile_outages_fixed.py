@@ -261,6 +261,26 @@ def exceptions_by_service(
     return compacted
 
 
+def _intervals_intersection_ms(
+    intervals_a: list[tuple[int, int]], intervals_b: list[tuple[int, int]]
+) -> int:
+    total = 0
+    i = 0
+    j = 0
+    while i < len(intervals_a) and j < len(intervals_b):
+        a_start, a_end = intervals_a[i]
+        b_start, b_end = intervals_b[j]
+        overlap_start = max(a_start, b_start)
+        overlap_end = min(a_end, b_end)
+        if overlap_end > overlap_start:
+            total += overlap_end - overlap_start
+        if a_end <= b_end:
+            i += 1
+        else:
+            j += 1
+    return total
+
+
 def merge_windows(
     canonical_rows: list[dict],
     maintenance_rows: list[dict],
@@ -347,12 +367,16 @@ def merge_windows(
                 span_end = min(block["end_ms"], end)
                 if span_end > span_start:
                     boost_spans.append((span_start, span_end))
-            block["suppression_overlap_ms"] = sum(
+            suppression_raw_ms = sum(
                 span_end - span_start for span_start, span_end in suppress_spans
             )
-            block["boost_overlap_ms"] = sum(
+            boost_overlap_ms = sum(
                 span_end - span_start for span_start, span_end in boost_spans
             )
+            # When suppress and boost overlaps intersect, intersection time belongs to boost.
+            intersection_ms = _intervals_intersection_ms(suppress_spans, boost_spans)
+            block["suppression_overlap_ms"] = max(suppression_raw_ms - intersection_ms, 0)
+            block["boost_overlap_ms"] = boost_overlap_ms
             block["window_signature"] = hashlib.sha1(
                 (
                     f"{service}|{block['start_ms']}|{block['end_ms']}|"
@@ -372,7 +396,11 @@ def build_queue(windows: dict[str, list[dict]], policy_data: dict) -> list[dict]
         for block in blocks:
             suppress_unit = max(policy["suppress_unit_ms"], 1)
             boost_unit = max(policy["boost_unit_ms"], 1)
-            suppress_units = block["suppression_overlap_ms"] // suppress_unit
+            suppress_units = (
+                (block["suppression_overlap_ms"] + suppress_unit - 1) // suppress_unit
+                if block["suppression_overlap_ms"] > 0
+                else 0
+            )
             boost_units = block["boost_overlap_ms"] // boost_unit
             effective_queue_min_ms = max(
                 policy["queue_min_effective_ms"]
