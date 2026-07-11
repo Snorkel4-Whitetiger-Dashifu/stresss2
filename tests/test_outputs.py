@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -26,6 +27,7 @@ HANDOFF_PATH = Path("/app/data/handoff_windows.json")
 ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 
 FIXTURE = json.loads(Path("/tests/fixtures/expected_outputs.json").read_text())
+BROKEN_PIPELINE_SHA256 = "66d60b3125b19156519a03dfb25cecd23e372b8bdae43906282571d8a5badcb5"
 
 SEVERITY_ORDER = ("critical", "major", "minor")
 PRIORITY_ORDER = ("critical", "high", "medium")
@@ -67,6 +69,20 @@ def _write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2) + "\n")
 
 
+def _stable_json_hash(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _stable_jsonl_hash(rows: list[dict]) -> str:
+    payload = "\n".join(
+        json.dumps(row, sort_keys=True, separators=(",", ":"))
+        for row in rows
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _prepare_outputs():
     if OUTPUT_DIR.exists():
@@ -106,15 +122,15 @@ def test_output_dir_contains_exactly_three_files():
 
 
 def test_primary_summary_exact_fixture(summary: dict):
-    assert summary == FIXTURE["primary"]["summary"]
+    assert _stable_json_hash(summary) == FIXTURE["primary_summary_sha256"]
 
 
 def test_primary_windows_exact_fixture(windows: dict[str, list[dict]]):
-    assert windows == FIXTURE["primary"]["windows"]
+    assert _stable_json_hash(windows) == FIXTURE["primary_windows_sha256"]
 
 
 def test_primary_queue_exact_fixture(queue_rows: list[dict]):
-    assert queue_rows == FIXTURE["primary"]["queue_rows"]
+    assert _stable_jsonl_hash(queue_rows) == FIXTURE["primary_queue_sha256"]
 
 
 def test_alternate_input_exact_fixture():
@@ -123,9 +139,15 @@ def test_alternate_input_exact_fixture():
         out.mkdir(parents=True, exist_ok=True)
         result = _run_pipeline(input_path=ALT_INPUT_PATH, output_dir=out)
         assert result.returncode == 0, result.stderr
-        assert _load_json(out / "downtime_summary.json") == FIXTURE["alternate"]["summary"]
-        assert _load_json(out / "service_windows.json") == FIXTURE["alternate"]["windows"]
-        assert _load_jsonl(out / "incident_queue.jsonl") == FIXTURE["alternate"]["queue_rows"]
+        assert _stable_json_hash(_load_json(out / "downtime_summary.json")) == FIXTURE[
+            "alternate_summary_sha256"
+        ]
+        assert _stable_json_hash(_load_json(out / "service_windows.json")) == FIXTURE[
+            "alternate_windows_sha256"
+        ]
+        assert _stable_jsonl_hash(_load_jsonl(out / "incident_queue.jsonl")) == FIXTURE[
+            "alternate_queue_sha256"
+        ]
 
 
 def test_summary_schema_and_order(summary: dict):
@@ -313,34 +335,86 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
 
 
 def test_checksum_fields_match_fixture(summary: dict):
-    assert summary["canonical_input_checksum"] == FIXTURE["primary"]["summary"]["canonical_input_checksum"]
-    assert summary["queue_signature_checksum"] == FIXTURE["primary"]["summary"]["queue_signature_checksum"]
-    assert (
-        summary["maintenance_compaction_checksum"]
-        == FIXTURE["primary"]["summary"]["maintenance_compaction_checksum"]
-    )
-    assert (
-        summary["exception_compaction_checksum"]
-        == FIXTURE["primary"]["summary"]["exception_compaction_checksum"]
-    )
-    assert (
-        summary["handoff_compaction_checksum"]
-        == FIXTURE["primary"]["summary"]["handoff_compaction_checksum"]
-    )
-    assert summary["queue_digest_checksum"] == FIXTURE["primary"]["summary"]["queue_digest_checksum"]
-    assert summary["policy_checksum"] == FIXTURE["primary"]["summary"]["policy_checksum"]
+    assert len(summary["canonical_input_checksum"]) == 64
+    assert len(summary["queue_signature_checksum"]) == 64
+    assert len(summary["maintenance_compaction_checksum"]) == 64
+    assert len(summary["exception_compaction_checksum"]) == 64
+    assert len(summary["handoff_compaction_checksum"]) == 64
+    assert len(summary["queue_digest_checksum"]) == 64
+    assert len(summary["policy_checksum"]) == 64
 
 
 def test_original_snapshot_preserved():
     assert ORIGINAL_PIPELINE.exists()
     digest = hashlib.sha256(ORIGINAL_PIPELINE.read_bytes()).hexdigest()
-    assert digest == FIXTURE["broken_pipeline_sha256"]
+    assert digest == BROKEN_PIPELINE_SHA256
 
 
 def test_pipeline_does_not_reference_test_artifacts():
     code = PIPELINE.read_text()
-    for token in ("/tests", "expected_outputs.json", "fixtures/alt_outages.json", "test_outputs.py"):
+    for token in ("/tests", "expected_outputs.json", "test_outputs.py"):
         assert token not in code
+
+
+def test_pipeline_runtime_does_not_read_tests_tree():
+    """Guard runtime file reads under /tests via sitecustomize hook."""
+    with tempfile.TemporaryDirectory() as tmp:
+        guard_path = Path(tmp) / "sitecustomize.py"
+        guard_path.write_text(
+            "\n".join(
+                [
+                    "import builtins",
+                    "import os",
+                    "from pathlib import Path",
+                    "_orig_open = builtins.open",
+                    "_orig_read_text = Path.read_text",
+                    "_orig_read_bytes = Path.read_bytes",
+                    "def _blocked(value):",
+                    "    try:",
+                    "        p = Path(value).resolve()",
+                    "    except Exception:",
+                    "        return False",
+                    "    return '/tests' in str(p)",
+                    "def _guarded_open(file, *args, **kwargs):",
+                    "    if _blocked(file):",
+                    "        raise PermissionError(f'blocked test-tree read: {file}')",
+                    "    return _orig_open(file, *args, **kwargs)",
+                    "def _guarded_read_text(self, *args, **kwargs):",
+                    "    if _blocked(self):",
+                    "        raise PermissionError(f'blocked test-tree read: {self}')",
+                    "    return _orig_read_text(self, *args, **kwargs)",
+                    "def _guarded_read_bytes(self, *args, **kwargs):",
+                    "    if _blocked(self):",
+                    "        raise PermissionError(f'blocked test-tree read: {self}')",
+                    "    return _orig_read_bytes(self, *args, **kwargs)",
+                    "builtins.open = _guarded_open",
+                    "Path.read_text = _guarded_read_text",
+                    "Path.read_bytes = _guarded_read_bytes",
+                ]
+            )
+            + "\n"
+        )
+        with tempfile.TemporaryDirectory() as out_tmp:
+            out = Path(out_tmp) / "out"
+            out.mkdir(parents=True, exist_ok=True)
+            env = dict(os.environ)
+            existing = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = f"{tmp}:{existing}" if existing else tmp
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(PIPELINE),
+                    "--input",
+                    str(INPUT_PATH),
+                    "--output-dir",
+                    str(out),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=env,
+            )
+            assert result.returncode == 0, result.stderr
 
 
 def test_broken_snapshot_is_wrong():
@@ -350,9 +424,12 @@ def test_broken_snapshot_is_wrong():
         shutil.copy(ORIGINAL_PIPELINE, broken)
         result = _run_pipeline(pipeline=broken, output_dir=out)
         assert result.returncode == 0, result.stderr
+        broken_summary = _load_json(out / "downtime_summary.json")
+        broken_windows = _load_json(out / "service_windows.json")
         queue = _load_jsonl(out / "incident_queue.jsonl")
-        assert len(queue) == FIXTURE["broken_queue_count"]
-        assert queue != FIXTURE["primary"]["queue_rows"]
+        assert _stable_json_hash(broken_summary) != FIXTURE["primary_summary_sha256"]
+        assert _stable_json_hash(broken_windows) != FIXTURE["primary_windows_sha256"]
+        assert _stable_jsonl_hash(queue) != FIXTURE["primary_queue_sha256"]
 
 
 def test_pipeline_rerun_idempotent(summary: dict, windows: dict[str, list[dict]], queue_rows: list[dict]):
