@@ -1,0 +1,12 @@
+[
+  {"service": "auth", "severity_scope": "all", "start_ms": 260, "end_ms": 360},
+  {"service": "authentication", "severity_scope": "critical", "start_ms": 560, "end_ms": 640},
+  {"service": "auth", "severity_scope": "critical", "start_ms": 635, "end_ms": 705},
+  {"service": "payments", "severity_scope": "all", "start_ms": 930, "end_ms": 1020},
+  {"service": "billing", "severity_scope": "major", "start_ms": 1000, "end_ms": 1150},
+  {"service": "search-api", "severity_scope": "all", "start_ms": 620, "end_ms": 700},
+  {"service": "search", "severity_scope": "critical", "start_ms": 900, "end_ms": 1060},
+  {"service": "search", "severity_scope": "major", "start_ms": 1290, "end_ms": 1380},
+  {"service": "search", "severity_scope": "debug", "start_ms": 0, "end_ms": 1},
+  {"service": "auth", "severity_scope": "all", "start_ms": "oops", "end_ms": "oops2"}
+]
