@@ -107,9 +107,17 @@ def maintenance_by_service(maintenance_rows: list[dict]) -> dict[str, list[tuple
         if end <= start:
             continue
         by_service.setdefault(service, []).append((start, end))
+    merged_by_service: dict[str, list[tuple[int, int]]] = {}
     for service in by_service:
-        by_service[service].sort()
-    return by_service
+        intervals = sorted(by_service[service])
+        merged: list[list[int]] = []
+        for start, end in intervals:
+            if not merged or start > merged[-1][1]:
+                merged.append([start, end])
+            else:
+                merged[-1][1] = max(merged[-1][1], end)
+        merged_by_service[service] = [(start, end) for start, end in merged]
+    return merged_by_service
 
 
 def merge_windows(
