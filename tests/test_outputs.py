@@ -21,6 +21,7 @@ ORIGINAL_PIPELINE = Path("/app/workflow/.compile_outages.original")
 INPUT_PATH = Path("/app/data/outages.json")
 MAINTENANCE_PATH = Path("/app/data/maintenance_windows.json")
 POLICY_PATH = Path("/app/data/response_policies.json")
+EXCEPTIONS_PATH = Path("/app/data/routing_exceptions.json")
 ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 
 FIXTURE = json.loads(Path("/tests/fixtures/expected_outputs.json").read_text())
@@ -137,16 +138,20 @@ def test_summary_schema_and_order(summary: dict):
         "total_unplanned_downtime_ms",
         "total_maintenance_overlap_ms",
         "total_maintenance_span_count",
+        "total_suppression_overlap_ms",
+        "total_boost_overlap_ms",
         "total_billable_downtime_ms",
         "longest_window_ms",
         "queued_window_count",
         "priority_counts",
         "max_escalation_score",
+        "max_exception_balance_score",
         "planned_excluded_count",
         "critical_window_count",
         "canonical_input_checksum",
         "queue_signature_checksum",
         "maintenance_compaction_checksum",
+        "exception_compaction_checksum",
         "policy_checksum",
     }
     assert summary["schema_version"] == "outage-windows-v1"
@@ -155,6 +160,7 @@ def test_summary_schema_and_order(summary: dict):
     assert len(summary["canonical_input_checksum"]) == 64
     assert len(summary["queue_signature_checksum"]) == 64
     assert len(summary["maintenance_compaction_checksum"]) == 64
+    assert len(summary["exception_compaction_checksum"]) == 64
     assert len(summary["policy_checksum"]) == 64
 
 
@@ -165,6 +171,8 @@ def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
         "duration_ms",
         "maintenance_overlap_ms",
         "maintenance_span_count",
+        "suppression_overlap_ms",
+        "boost_overlap_ms",
         "billable_duration_ms",
         "incident_count",
         "critical_incident_count",
@@ -194,6 +202,8 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
         "duration_ms",
         "maintenance_overlap_ms",
         "maintenance_span_count",
+        "suppression_overlap_ms",
+        "boost_overlap_ms",
         "billable_duration_ms",
         "incident_count",
         "critical_incident_count",
@@ -202,6 +212,8 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
         "window_signature",
         "policy_profile",
         "policy_queue_min_ms",
+        "effective_queue_min_ms",
+        "exception_balance_score",
         "escalation_score",
         "priority",
         "outage_signature",
@@ -215,9 +227,10 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
 
 def test_priority_rules_are_enforced(queue_rows: list[dict]):
     for row in queue_rows:
-        assert row["billable_duration_ms"] >= row["policy_queue_min_ms"]
+        assert row["billable_duration_ms"] >= row["effective_queue_min_ms"]
+        assert row["effective_queue_min_ms"] >= 0
         assert row["policy_profile"] in {"default", "auth", "billing", "search"}
-        assert row["escalation_score"] >= 0
+        assert isinstance(row["exception_balance_score"], int)
 
 
 def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
@@ -226,6 +239,7 @@ def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
         (
             rank[row["priority"]],
             -row["escalation_score"],
+            -row["exception_balance_score"],
             -row["billable_duration_ms"],
             -row["critical_incident_count"],
             -row["maintenance_span_count"],
@@ -251,10 +265,14 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
     total_duration = sum(b["duration_ms"] for blocks in windows.values() for b in blocks)
     total_overlap = sum(b["maintenance_overlap_ms"] for blocks in windows.values() for b in blocks)
     total_spans = sum(b["maintenance_span_count"] for blocks in windows.values() for b in blocks)
+    total_suppression = sum(b["suppression_overlap_ms"] for blocks in windows.values() for b in blocks)
+    total_boost = sum(b["boost_overlap_ms"] for blocks in windows.values() for b in blocks)
     total_billable = sum(b["billable_duration_ms"] for blocks in windows.values() for b in blocks)
     assert summary["total_unplanned_downtime_ms"] == total_duration
     assert summary["total_maintenance_overlap_ms"] == total_overlap
     assert summary["total_maintenance_span_count"] == total_spans
+    assert summary["total_suppression_overlap_ms"] == total_suppression
+    assert summary["total_boost_overlap_ms"] == total_boost
     assert summary["total_billable_downtime_ms"] == total_billable
 
 
@@ -264,6 +282,10 @@ def test_checksum_fields_match_fixture(summary: dict):
     assert (
         summary["maintenance_compaction_checksum"]
         == FIXTURE["primary"]["summary"]["maintenance_compaction_checksum"]
+    )
+    assert (
+        summary["exception_compaction_checksum"]
+        == FIXTURE["primary"]["summary"]["exception_compaction_checksum"]
     )
     assert summary["policy_checksum"] == FIXTURE["primary"]["summary"]["policy_checksum"]
 
@@ -389,6 +411,32 @@ def test_policy_source_path_affects_output():
         POLICY_PATH.write_text(original)
 
 
+def test_exception_source_path_affects_output():
+    original = EXCEPTIONS_PATH.read_text()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_a = Path(tmp) / "a"
+            out_b = Path(tmp) / "b"
+            out_a.mkdir(parents=True, exist_ok=True)
+            out_b.mkdir(parents=True, exist_ok=True)
+            result_a = _run_pipeline(output_dir=out_a)
+            assert result_a.returncode == 0, result_a.stderr
+            summary_a = _load_json(out_a / "downtime_summary.json")
+            queue_a = _load_jsonl(out_a / "incident_queue.jsonl")
+
+            EXCEPTIONS_PATH.write_text("[]\n")
+            result_b = _run_pipeline(output_dir=out_b)
+            assert result_b.returncode == 0, result_b.stderr
+            summary_b = _load_json(out_b / "downtime_summary.json")
+            queue_b = _load_jsonl(out_b / "incident_queue.jsonl")
+            assert summary_a["exception_compaction_checksum"] != summary_b["exception_compaction_checksum"]
+            assert summary_a["total_boost_overlap_ms"] != summary_b["total_boost_overlap_ms"]
+            assert summary_a["total_suppression_overlap_ms"] != summary_b["total_suppression_overlap_ms"]
+            assert queue_a != queue_b
+    finally:
+        EXCEPTIONS_PATH.write_text(original)
+
+
 def test_maintenance_compaction_and_span_count_exercised():
     original = MAINTENANCE_PATH.read_text()
     try:
@@ -475,4 +523,116 @@ def test_planned_coercion_aliases_and_unknown_severity_exercised():
             assert list(windows.keys()) == ["auth"]
     finally:
         MAINTENANCE_PATH.write_text(original)
+
+
+def test_exception_compaction_and_balance_exercised():
+    original_maint = MAINTENANCE_PATH.read_text()
+    original_ex = EXCEPTIONS_PATH.read_text()
+    try:
+        MAINTENANCE_PATH.write_text("[]\n")
+        _write_json(
+            EXCEPTIONS_PATH,
+            [
+                {"service": "search-api", "start_ms": 100, "end_ms": 180, "action": "boost"},
+                {"service": "search", "start_ms": 170, "end_ms": 220, "action": "boost"},
+                {"service": "search", "start_ms": 210, "end_ms": 260, "action": "suppress"},
+                {"service": "search", "start_ms": 260, "end_ms": 280, "action": "suppress"},
+                {"service": "search", "start_ms": 280, "end_ms": 280, "action": "boost"},
+            ],
+        )
+        rows = [
+            {
+                "incident_id": "e1",
+                "service": "search",
+                "start_ms": 90,
+                "end_ms": 300,
+                "severity": "major",
+                "planned": False,
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            in_path = Path(tmp) / "in.json"
+            out = Path(tmp) / "out"
+            _write_json(in_path, rows)
+            out.mkdir(parents=True, exist_ok=True)
+            result = _run_pipeline(input_path=in_path, output_dir=out)
+            assert result.returncode == 0, result.stderr
+            windows = _load_json(out / "service_windows.json")
+            queue = _load_jsonl(out / "incident_queue.jsonl")
+            block = windows["search"][0]
+            assert block["boost_overlap_ms"] == 120
+            assert block["suppression_overlap_ms"] == 70
+            assert queue[0]["effective_queue_min_ms"] == 180
+            assert queue[0]["exception_balance_score"] == 2
+    finally:
+        MAINTENANCE_PATH.write_text(original_maint)
+        EXCEPTIONS_PATH.write_text(original_ex)
+
+
+def test_effective_queue_threshold_uses_exception_units_and_floor():
+    original_maint = MAINTENANCE_PATH.read_text()
+    original_ex = EXCEPTIONS_PATH.read_text()
+    original_policy = POLICY_PATH.read_text()
+    try:
+        MAINTENANCE_PATH.write_text("[]\n")
+        _write_json(
+            EXCEPTIONS_PATH,
+            [
+                {"service": "auth", "start_ms": 0, "end_ms": 120, "action": "suppress"},
+                {"service": "authentication", "start_ms": 60, "end_ms": 180, "action": "boost"},
+            ],
+        )
+        _write_json(
+            POLICY_PATH,
+            {
+                "default": {
+                    "queue_min_effective_ms": 250,
+                    "critical_p1_min_ms": 280,
+                    "critical_threshold_ms": 650,
+                    "high_threshold_ms": 320,
+                    "no_overlap_high_duration_ms": 450,
+                    "critical_count_for_critical": 2,
+                    "no_overlap_bonus": 0,
+                    "segment_bonus": 0,
+                    "suppress_penalty_ms": 50,
+                    "boost_credit_ms": 20,
+                    "suppress_unit_ms": 50,
+                    "boost_unit_ms": 40,
+                    "min_queue_floor_ms": 150,
+                    "boost_force_critical_ms": 999,
+                    "boost_high_relief_ms": 30,
+                    "severity_weight": {"critical": 5, "major": 3, "minor": 1},
+                    "score_threshold_critical": 999,
+                    "score_threshold_high": 999
+                },
+                "service_overrides": {}
+            },
+        )
+        rows = [
+            {
+                "incident_id": "q1",
+                "service": "auth",
+                "start_ms": 0,
+                "end_ms": 300,
+                "severity": "major",
+                "planned": False,
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            in_path = Path(tmp) / "in.json"
+            out = Path(tmp) / "out"
+            _write_json(in_path, rows)
+            out.mkdir(parents=True, exist_ok=True)
+            result = _run_pipeline(input_path=in_path, output_dir=out)
+            assert result.returncode == 0, result.stderr
+            queue = _load_jsonl(out / "incident_queue.jsonl")
+            assert len(queue) == 1
+            row = queue[0]
+            assert row["effective_queue_min_ms"] == 290
+            assert row["exception_balance_score"] == 1
+            assert row["priority"] == "high"
+    finally:
+        MAINTENANCE_PATH.write_text(original_maint)
+        EXCEPTIONS_PATH.write_text(original_ex)
+        POLICY_PATH.write_text(original_policy)
 

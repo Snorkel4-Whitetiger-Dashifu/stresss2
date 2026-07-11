@@ -1,0 +1,12 @@
+[
+  {"service": "auth", "start_ms": 120, "end_ms": 260, "action": "suppress"},
+  {"service": "authentication", "start_ms": 500, "end_ms": 560, "action": "boost"},
+  {"service": "auth", "start_ms": 555, "end_ms": 600, "action": "boost"},
+  {"service": "payments", "start_ms": 250, "end_ms": 340, "action": "boost"},
+  {"service": "billing", "start_ms": 930, "end_ms": 1080, "action": "suppress"},
+  {"service": "search-api", "start_ms": 640, "end_ms": 740, "action": "boost"},
+  {"service": "search", "start_ms": 700, "end_ms": 780, "action": "suppress"},
+  {"service": "search", "start_ms": "oops", "end_ms": "20", "action": "boost"},
+  {"service": "search", "start_ms": 780, "end_ms": 780, "action": "boost"},
+  {"service": "auth", "start_ms": 50, "end_ms": 90, "action": "ignore"}
+]
