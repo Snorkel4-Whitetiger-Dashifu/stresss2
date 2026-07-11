@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "task_scope": "system-administration / incident-routing",
   "io": {
     "cli": "python3 /app/workflow/compile_outages.py --input PATH --output-dir PATH",
@@ -78,10 +78,18 @@
       "critical"
     ],
     "attenuation": {
+      "billable_duration_ms": "max(duration_ms - maintenance_overlap_ms, 0)",
       "adjusted_billable_duration_ms": "max(billable_duration_ms - (handoff_overlap_ms // 2), 0)",
       "routed_billable_duration_ms": "max(adjusted_billable_duration_ms - (blackout_overlap_ms // 3), 0)",
       "dispatchable_billable_duration_ms": "max(routed_billable_duration_ms - (degrade_overlap_ms // 4), 0)"
-    }
+    },
+    "billable_field_order_contract": [
+      "billable_duration_ms depends only on duration_ms and maintenance_overlap_ms",
+      "suppression_overlap_ms and boost_overlap_ms are tracked separately and do not directly change billable_duration_ms",
+      "adjusted_billable_duration_ms depends only on billable_duration_ms and handoff_overlap_ms",
+      "routed_billable_duration_ms depends only on adjusted_billable_duration_ms and blackout_overlap_ms",
+      "dispatchable_billable_duration_ms depends only on routed_billable_duration_ms and degrade_overlap_ms"
+    ]
   },
   "policies": {
     "defaults": {
@@ -123,6 +131,12 @@
     "override_behavior": "default profile, then service_overrides[service], field-wise merge"
   },
   "queue": {
+    "identifiers": {
+      "window_signature": "first 10 lowercase hex chars of sha1(service|start_ms|end_ms|comma_joined_source_incident_ids|max_severity|handoff_segment_count|blackout_segment_count|degrade_segment_count)",
+      "window_id": "service:start_ms-end_ms",
+      "policy_profile": "string 'default' for default policy or canonical normalized service name for service override profile; no prefixes/suffixes",
+      "policy_queue_min_ms": "equal to selected profile's queue_min_effective_ms before unit penalties/credits"
+    },
     "units": {
       "suppress_units": "0 when suppression_overlap_ms == 0 else ceil(suppression_overlap_ms / max(suppress_unit_ms, 1))",
       "boost_units": "boost_overlap_ms // max(boost_unit_ms, 1)",
@@ -237,6 +251,50 @@
       "outage_signature",
       "queue_digest"
     ],
+    "summary_exact_keys": [
+      "schema_version",
+      "raw_incident_count",
+      "unique_incident_ids",
+      "canonical_incident_count",
+      "service_count",
+      "severity_counts",
+      "total_unplanned_downtime_ms",
+      "total_maintenance_overlap_ms",
+      "total_maintenance_span_count",
+      "total_suppression_overlap_ms",
+      "total_boost_overlap_ms",
+      "total_handoff_overlap_ms",
+      "total_handoff_segment_count",
+      "total_blackout_overlap_ms",
+      "total_blackout_segment_count",
+      "total_degrade_overlap_ms",
+      "total_degrade_segment_count",
+      "total_billable_downtime_ms",
+      "total_adjusted_billable_downtime_ms",
+      "total_routed_billable_downtime_ms",
+      "total_dispatchable_billable_downtime_ms",
+      "longest_window_ms",
+      "queued_window_count",
+      "priority_counts",
+      "max_escalation_score",
+      "max_exception_balance_score",
+      "max_handoff_pressure_score",
+      "max_blackout_pressure_score",
+      "max_degrade_pressure_score",
+      "max_risk_vector",
+      "planned_excluded_count",
+      "critical_window_count",
+      "canonical_input_checksum",
+      "queue_signature_checksum",
+      "maintenance_compaction_checksum",
+      "exception_compaction_checksum",
+      "handoff_compaction_checksum",
+      "blackout_compaction_checksum",
+      "degrade_compaction_checksum",
+      "queue_digest_checksum",
+      "policy_checksum"
+    ],
+    "summary_layout_contract": "all summary_exact_keys must be top-level keys in downtime_summary.json; do not nest these fields under a child object",
     "summary_schema_version": "outage-windows-v1",
     "summary_severity_counts_order": [
       "critical",

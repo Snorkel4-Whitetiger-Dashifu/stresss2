@@ -38,6 +38,12 @@ All exact field names, default policy values, overlap semantics, score formulas,
 
 You must match that contract exactly.
 
+Important clarifications that are also normative in the contract:
+- `window_signature` is a 10-character truncated SHA-1 identifier (not a full hash and not a descriptive label).
+- `downtime_summary.json` uses a flat top-level schema; required aggregate/checksum fields are not nested under helper objects.
+- `billable_duration_ms` is maintenance-only, while handoff/blackout/degrade attenuation applies sequentially to adjusted/routed/dispatchable billable fields.
+- `policy_profile` is serialized as `default` or the canonical service name for overrides (no prefixes).
+
 ## Guardrails
 - Keep `/app/workflow/.compile_outages.original` unchanged.
 - Do not read/import verifier artifacts from `/tests`.
