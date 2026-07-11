@@ -36,9 +36,14 @@ Processing requirements:
    - `critical_incident_count`
    - `window_signature`: first 10 lowercase hex chars of SHA1 over `"{service}|{start_ms}|{end_ms}|{','.join(source_incident_ids)}|{max_severity}"`
 5. Maintenance overlap:
+   - canonicalize maintenance windows before overlap math:
+     - normalize `service` with the same alias mapping as incidents
+     - normalize `start_ms` / `end_ms` with the same int-coercion rule; ignore rows where `end_ms <= start_ms`
+     - merge per service when windows overlap or touch (`next.start_ms <= current.end_ms`)
    - same-service windows only
-   - overlap formula: `max(0, min(end_a, end_b) - max(start_a, start_b))`
-   - `maintenance_overlap_ms`: summed overlap
+   - overlap formula per segment: `max(0, min(end_a, end_b) - max(start_a, start_b))`
+   - `maintenance_overlap_ms`: summed overlap against canonical merged maintenance windows (no double-counting)
+   - `maintenance_span_count`: number of distinct overlap spans contributing to `maintenance_overlap_ms`
    - `billable_duration_ms = max(duration_ms - maintenance_overlap_ms, 0)`
 
 Queue behavior:
@@ -49,17 +54,17 @@ Queue behavior:
   - `critical` if (`max_severity == "critical"` and `billable_duration_ms >= 280`) OR `billable_duration_ms >= 650` OR `critical_incident_count >= 2`
   - `high` if `billable_duration_ms >= 320` OR (`incident_count >= 3` and `max_severity` in `{"major", "critical"}`) OR (`maintenance_overlap_ms == 0` and `duration_ms >= 450`)
   - else `medium`
-- sort order: priority rank (`critical > high > medium`), `billable_duration_ms` desc, `critical_incident_count` desc, `incident_count` desc, `service` asc, `start_ms` asc
+- sort order: priority rank (`critical > high > medium`), `billable_duration_ms` desc, `critical_incident_count` desc, `maintenance_span_count` desc, `incident_count` desc, `service` asc, `start_ms` asc
 - JSONL must be compact (`json.dumps(row, separators=(",", ":"))`)
 
 Output contracts (exact keys):
 - `service_windows.json`: flat `{service: [window, ...]}`; service keys asc, window list sorted by `start_ms` asc.
 - each window must contain exactly:
-  - `start_ms`, `end_ms`, `duration_ms`, `maintenance_overlap_ms`, `billable_duration_ms`, `incident_count`, `critical_incident_count`, `source_incident_ids`, `max_severity`, `window_signature`
+  - `start_ms`, `end_ms`, `duration_ms`, `maintenance_overlap_ms`, `maintenance_span_count`, `billable_duration_ms`, `incident_count`, `critical_incident_count`, `source_incident_ids`, `max_severity`, `window_signature`
 - `incident_queue.jsonl` rows must contain exactly:
-  - `window_id`, `service`, `start_ms`, `end_ms`, `duration_ms`, `maintenance_overlap_ms`, `billable_duration_ms`, `incident_count`, `critical_incident_count`, `source_incident_ids`, `max_severity`, `window_signature`, `priority`, `outage_signature`
+  - `window_id`, `service`, `start_ms`, `end_ms`, `duration_ms`, `maintenance_overlap_ms`, `maintenance_span_count`, `billable_duration_ms`, `incident_count`, `critical_incident_count`, `source_incident_ids`, `max_severity`, `window_signature`, `priority`, `outage_signature`
 - `downtime_summary.json` must contain exactly:
-  - `schema_version`, `raw_incident_count`, `unique_incident_ids`, `canonical_incident_count`, `service_count`, `severity_counts`, `total_unplanned_downtime_ms`, `total_maintenance_overlap_ms`, `total_billable_downtime_ms`, `longest_window_ms`, `queued_window_count`, `planned_excluded_count`, `critical_window_count`, `canonical_input_checksum`, `queue_signature_checksum`
+  - `schema_version`, `raw_incident_count`, `unique_incident_ids`, `canonical_incident_count`, `service_count`, `severity_counts`, `total_unplanned_downtime_ms`, `total_maintenance_overlap_ms`, `total_maintenance_span_count`, `total_billable_downtime_ms`, `longest_window_ms`, `queued_window_count`, `planned_excluded_count`, `critical_window_count`, `canonical_input_checksum`, `queue_signature_checksum`, `maintenance_compaction_checksum`
 
 Summary specifics:
 - `schema_version` is `"outage-windows-v1"`
@@ -67,5 +72,6 @@ Summary specifics:
 - `critical_window_count`: number of merged windows where `max_severity == "critical"`
 - `canonical_input_checksum`: SHA256 over canonical rows in canonical order (`service`, `start_ms`, `incident_id`) using line format `incident_id|service|start_ms|end_ms|severity|planned_int`, `planned_int` in `{0,1}`
 - `queue_signature_checksum`: lowercase SHA256 of `"|".join(outage_signature values in final queue order)`
+- `maintenance_compaction_checksum`: lowercase SHA256 over canonical merged maintenance windows in canonical order (`service`, `start_ms`, `end_ms`) using newline-joined line format `service|start_ms|end_ms`
 
 Keep `/app/workflow/.compile_outages.original` unchanged and do not read/import verifier artifacts from `/tests`.

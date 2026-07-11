@@ -171,9 +171,17 @@ def _maintenance_by_service(rows: list[dict]) -> dict[str, list[tuple[int, int]]
         if end <= start:
             continue
         out.setdefault(service, []).append((start, end))
+    merged_out: dict[str, list[tuple[int, int]]] = {}
     for service in out:
-        out[service].sort()
-    return out
+        intervals = sorted(out[service])
+        merged: list[list[int]] = []
+        for start, end in intervals:
+            if not merged or start > merged[-1][1]:
+                merged.append([start, end])
+            else:
+                merged[-1][1] = max(merged[-1][1], end)
+        merged_out[service] = [(start, end) for start, end in merged]
+    return merged_out
 
 
 def _overlap_ms(start_a: int, end_a: int, start_b: int, end_b: int) -> int:
@@ -182,7 +190,7 @@ def _overlap_ms(start_a: int, end_a: int, start_b: int, end_b: int) -> int:
 
 def _merge_unplanned(
     canonical_rows: list[dict], maintenance_rows: list[dict]
-) -> tuple[dict[str, list[dict]], int]:
+) -> tuple[dict[str, list[dict]], int, dict[str, list[tuple[int, int]]]]:
     by_service: dict[str, list[dict]] = {}
     planned_excluded_count = 0
     for row in canonical_rows:
@@ -235,10 +243,15 @@ def _merge_unplanned(
         for block in merged:
             block["source_incident_ids"] = sorted(block["source_incident_ids"])
             block["duration_ms"] = block["end_ms"] - block["start_ms"]
-            overlap = 0
+            overlap_spans: list[tuple[int, int]] = []
             for start, end in maintenance.get(service, []):
-                overlap += _overlap_ms(block["start_ms"], block["end_ms"], start, end)
+                span_start = max(block["start_ms"], start)
+                span_end = min(block["end_ms"], end)
+                if span_end > span_start:
+                    overlap_spans.append((span_start, span_end))
+            overlap = sum(span_end - span_start for span_start, span_end in overlap_spans)
             block["maintenance_overlap_ms"] = overlap
+            block["maintenance_span_count"] = len(overlap_spans)
             block["billable_duration_ms"] = max(block["duration_ms"] - overlap, 0)
             block["window_signature"] = hashlib.sha1(
                 (
@@ -249,7 +262,7 @@ def _merge_unplanned(
 
         windows[service] = merged
 
-    return windows, planned_excluded_count
+    return windows, planned_excluded_count, maintenance
 
 
 def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
@@ -290,6 +303,7 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
                     "end_ms": block["end_ms"],
                     "duration_ms": block["duration_ms"],
                     "maintenance_overlap_ms": block["maintenance_overlap_ms"],
+                    "maintenance_span_count": block["maintenance_span_count"],
                     "billable_duration_ms": block["billable_duration_ms"],
                     "incident_count": block["incident_count"],
                     "critical_incident_count": block["critical_incident_count"],
@@ -307,6 +321,7 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
             rank[row["priority"]],
             -row["billable_duration_ms"],
             -row["critical_incident_count"],
+            -row["maintenance_span_count"],
             -row["incident_count"],
             row["service"],
             row["start_ms"],
@@ -318,6 +333,7 @@ def _queue_from_windows(windows: dict[str, list[dict]]) -> list[dict]:
 def _build_summary(
     raw_rows: list[dict],
     canonical_rows: list[dict],
+    maintenance: dict[str, list[tuple[int, int]]],
     windows: dict[str, list[dict]],
     queue: list[dict],
     planned_excluded_count: int,
@@ -329,6 +345,9 @@ def _build_summary(
     total_unplanned = sum(block["duration_ms"] for blocks in windows.values() for block in blocks)
     total_maintenance = sum(
         block["maintenance_overlap_ms"] for blocks in windows.values() for block in blocks
+    )
+    total_maintenance_span_count = sum(
+        block["maintenance_span_count"] for blocks in windows.values() for block in blocks
     )
     total_billable = sum(
         block["billable_duration_ms"] for blocks in windows.values() for block in blocks
@@ -352,6 +371,13 @@ def _build_summary(
     checksum = hashlib.sha256(
         "|".join(row["outage_signature"] for row in queue).encode("utf-8")
     ).hexdigest()
+    maintenance_compaction_checksum = hashlib.sha256(
+        "\n".join(
+            f"{service}|{start}|{end}"
+            for service in sorted(maintenance)
+            for start, end in maintenance[service]
+        ).encode("utf-8")
+    ).hexdigest()
 
     return {
         "schema_version": "outage-windows-v1",
@@ -362,6 +388,7 @@ def _build_summary(
         "severity_counts": severity_counts,
         "total_unplanned_downtime_ms": total_unplanned,
         "total_maintenance_overlap_ms": total_maintenance,
+        "total_maintenance_span_count": total_maintenance_span_count,
         "total_billable_downtime_ms": total_billable,
         "longest_window_ms": longest_window,
         "queued_window_count": len(queue),
@@ -369,6 +396,7 @@ def _build_summary(
         "critical_window_count": critical_window_count,
         "canonical_input_checksum": canonical_input_checksum,
         "queue_signature_checksum": checksum,
+        "maintenance_compaction_checksum": maintenance_compaction_checksum,
     }
 
 
@@ -376,9 +404,9 @@ def _expected_from_input(path: Path) -> tuple[dict, dict[str, list[dict]], list[
     raw_rows = _load_json(path)
     maintenance_rows = _load_json(MAINTENANCE_PATH)
     canonical_rows = _canonicalize(raw_rows)
-    windows, planned_count = _merge_unplanned(canonical_rows, maintenance_rows)
+    windows, planned_count, maintenance = _merge_unplanned(canonical_rows, maintenance_rows)
     queue = _queue_from_windows(windows)
-    summary = _build_summary(raw_rows, canonical_rows, windows, queue, planned_count)
+    summary = _build_summary(raw_rows, canonical_rows, maintenance, windows, queue, planned_count)
     return summary, windows, queue
 
 
@@ -431,6 +459,7 @@ def test_summary_schema(summary: dict):
         "severity_counts",
         "total_unplanned_downtime_ms",
         "total_maintenance_overlap_ms",
+        "total_maintenance_span_count",
         "total_billable_downtime_ms",
         "longest_window_ms",
         "queued_window_count",
@@ -438,6 +467,7 @@ def test_summary_schema(summary: dict):
         "critical_window_count",
         "canonical_input_checksum",
         "queue_signature_checksum",
+        "maintenance_compaction_checksum",
     }
     assert summary["schema_version"] == "outage-windows-v1"
     assert list(summary["severity_counts"].keys()) == list(SEVERITY_ORDER)
@@ -468,6 +498,7 @@ def test_queue_required_fields(queue_rows: list[dict]):
         "end_ms",
         "duration_ms",
         "maintenance_overlap_ms",
+        "maintenance_span_count",
         "billable_duration_ms",
         "incident_count",
         "critical_incident_count",
@@ -510,6 +541,7 @@ def test_queue_sorted(queue_rows: list[dict]):
             rank[row["priority"]],
             -row["billable_duration_ms"],
             -row["critical_incident_count"],
+            -row["maintenance_span_count"],
             -row["incident_count"],
             row["service"],
             row["start_ms"],
@@ -539,6 +571,7 @@ def test_windows_are_sorted_and_have_extra_fields(windows: dict[str, list[dict]]
                 "end_ms",
                 "duration_ms",
                 "maintenance_overlap_ms",
+                "maintenance_span_count",
                 "billable_duration_ms",
                 "incident_count",
                 "critical_incident_count",
@@ -553,11 +586,13 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
     total_overlap = sum(
         block["maintenance_overlap_ms"] for blocks in windows.values() for block in blocks
     )
+    total_spans = sum(block["maintenance_span_count"] for blocks in windows.values() for block in blocks)
     total_billable = sum(
         block["billable_duration_ms"] for blocks in windows.values() for block in blocks
     )
     assert summary["total_unplanned_downtime_ms"] == total_duration
     assert summary["total_maintenance_overlap_ms"] == total_overlap
+    assert summary["total_maintenance_span_count"] == total_spans
     assert summary["total_billable_downtime_ms"] == total_billable
     assert total_billable <= total_duration
 
@@ -707,7 +742,7 @@ def test_stitch_gap_30_merge_and_window_signature():
         {"incident_id": "g2", "service": "auth", "start_ms": 230, "end_ms": 260, "severity": "critical", "planned": False},
     ]
     maintenance = []
-    windows, _ = _merge_unplanned(_canonicalize(rows), maintenance)
+    windows, _, _ = _merge_unplanned(_canonicalize(rows), maintenance)
     assert len(windows["auth"]) == 1
     block = windows["auth"][0]
     assert block["start_ms"] == 100
@@ -725,6 +760,7 @@ def test_queue_priority_uses_critical_incident_count_override():
                 "end_ms": 300,
                 "duration_ms": 290,
                 "maintenance_overlap_ms": 90,
+                "maintenance_span_count": 2,
                 "billable_duration_ms": 200,
                 "incident_count": 3,
                 "critical_incident_count": 2,
@@ -751,6 +787,7 @@ def test_queue_signature_includes_window_signature():
                 "end_ms": 400,
                 "duration_ms": 390,
                 "maintenance_overlap_ms": 0,
+                "maintenance_span_count": 0,
                 "billable_duration_ms": 390,
                 "incident_count": 2,
                 "critical_incident_count": 1,
@@ -783,3 +820,39 @@ def test_summary_checksum_fields_are_consistent(summary: dict, queue_rows: list[
         ).encode("utf-8")
     ).hexdigest()
     assert summary["canonical_input_checksum"] == expected_input_checksum
+
+    maintenance = _maintenance_by_service(_load_json(MAINTENANCE_PATH))
+    expected_maintenance_checksum = hashlib.sha256(
+        "\n".join(
+            f"{service}|{start}|{end}"
+            for service in sorted(maintenance)
+            for start, end in maintenance[service]
+        ).encode("utf-8")
+    ).hexdigest()
+    assert summary["maintenance_compaction_checksum"] == expected_maintenance_checksum
+
+
+def test_maintenance_overlap_uses_compacted_non_overlapping_spans():
+    canonical_rows = _canonicalize(
+        [
+            {
+                "incident_id": "mwin",
+                "service": "Payments",
+                "start_ms": 90,
+                "end_ms": 260,
+                "severity": "major",
+                "planned": False,
+            }
+        ]
+    )
+    maintenance_rows = [
+        {"service": "billing", "start_ms": 100, "end_ms": 150},
+        {"service": "billing", "start_ms": 140, "end_ms": 200},
+        {"service": "payments", "start_ms": 200, "end_ms": 230},
+        {"service": "billing", "start_ms": 230, "end_ms": 250},
+    ]
+    windows, _, maintenance = _merge_unplanned(canonical_rows, maintenance_rows)
+    assert maintenance["billing"] == [(100, 250)]
+    block = windows["billing"][0]
+    assert block["maintenance_overlap_ms"] == 150
+    assert block["maintenance_span_count"] == 1
