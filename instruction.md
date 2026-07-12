@@ -6,4 +6,8 @@ Produce exactly `downtime_summary.json`, `service_windows.json`, and compact `in
 
 Summary values must be SHA-reproducible, not merely schema-compatible. Follow the runbook’s exact UTF-8 payload fields, row ordering, delimiters, boolean encodings, aggregate domains, and complete policy-line serialization. Resolve sparse policy files and service overrides against the documented defaults field by field, including nested severity weights.
 
+`source_incident_ids` is a sorted array of unique string IDs in both `service_windows.json` and `incident_queue.jsonl`; comma-joined incident IDs are used only inside signature/checksum payloads.
+
+After billable/routed/dispatchable attenuation, compute the per-service debt ledger sequentially in window start order (`idle_gap_ms`, `debt_in_ms`, `debt_out_ms`, `debt_adjusted_dispatchable_ms`). Queue admission uses debt-adjusted dispatchability, and queue scoring/priority/risk fields include debt pressure exactly as specified.
+
 Preserve `/app/workflow/.compile_outages.original` unchanged. Do not read or import verifier artifacts, and do not place the forbidden verifier path or fixture/test filenames listed in the runbook anywhere in repaired source code, including comments and docstrings.

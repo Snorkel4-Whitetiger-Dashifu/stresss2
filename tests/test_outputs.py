@@ -50,6 +50,18 @@ def test_checksum_serialization_contract_vectors():
         assert hashlib.sha256(payload).hexdigest() == vectors[f"{prefix}_sha256"]
 
 
+def test_identifier_contract_vectors():
+    vectors = CONTRACT["queue"]["identifiers"]["identifier_test_vectors"]
+    assert (
+        hashlib.sha1(vectors["outage_signature_payload"].encode("utf-8")).hexdigest()[:12]
+        == vectors["outage_signature"]
+    )
+    assert (
+        hashlib.sha1(vectors["queue_digest_payload"].encode("utf-8")).hexdigest()[:10]
+        == vectors["queue_digest"]
+    )
+
+
 def _run_pipeline(
     pipeline: Path = PIPELINE,
     input_path: Path = INPUT_PATH,
@@ -190,6 +202,7 @@ def test_summary_schema_and_order(summary: dict):
         "total_adjusted_billable_downtime_ms",
         "total_routed_billable_downtime_ms",
         "total_dispatchable_billable_downtime_ms",
+        "total_debt_adjusted_dispatchable_downtime_ms",
         "longest_window_ms",
         "queued_window_count",
         "priority_counts",
@@ -198,6 +211,8 @@ def test_summary_schema_and_order(summary: dict):
         "max_handoff_pressure_score",
         "max_blackout_pressure_score",
         "max_degrade_pressure_score",
+        "max_debt_pressure_score",
+        "max_debt_out_ms",
         "max_risk_vector",
         "planned_excluded_count",
         "critical_window_count",
@@ -244,6 +259,10 @@ def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
         "degrade_overlap_ms",
         "degrade_segment_count",
         "dispatchable_billable_duration_ms",
+        "idle_gap_ms",
+        "debt_in_ms",
+        "debt_out_ms",
+        "debt_adjusted_dispatchable_ms",
         "incident_count",
         "critical_incident_count",
         "source_incident_ids",
@@ -272,7 +291,13 @@ def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
                 block["routed_billable_duration_ms"] - (block["degrade_overlap_ms"] // 4),
                 0,
             )
+            assert block["debt_adjusted_dispatchable_ms"] == (
+                block["dispatchable_billable_duration_ms"] + (block["debt_in_ms"] // 5)
+            )
+            assert block["debt_out_ms"] >= block["debt_in_ms"]
             assert block["source_incident_ids"] == sorted(block["source_incident_ids"])
+            assert isinstance(block["source_incident_ids"], list)
+            assert all(isinstance(value, str) for value in block["source_incident_ids"])
 
 
 def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
@@ -296,6 +321,9 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
         "degrade_overlap_ms",
         "degrade_segment_count",
         "dispatchable_billable_duration_ms",
+        "debt_in_ms",
+        "debt_out_ms",
+        "debt_adjusted_dispatchable_ms",
         "incident_count",
         "critical_incident_count",
         "source_incident_ids",
@@ -311,6 +339,7 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
         "handoff_pressure_score",
         "blackout_pressure_score",
         "degrade_pressure_score",
+        "debt_pressure_score",
         "escalation_score",
         "risk_vector",
         "priority",
@@ -327,7 +356,7 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
 
 def test_priority_rules_are_enforced(queue_rows: list[dict]):
     for row in queue_rows:
-        assert row["dispatchable_billable_duration_ms"] >= row["dispatch_queue_min_ms"]
+        assert row["debt_adjusted_dispatchable_ms"] >= row["dispatch_queue_min_ms"]
         assert row["dispatch_queue_min_ms"] >= row["routed_queue_min_ms"]
         assert row["routed_queue_min_ms"] >= row["adjusted_queue_min_ms"]
         assert row["adjusted_queue_min_ms"] >= row["effective_queue_min_ms"]
@@ -337,6 +366,7 @@ def test_priority_rules_are_enforced(queue_rows: list[dict]):
         assert isinstance(row["handoff_pressure_score"], int)
         assert isinstance(row["blackout_pressure_score"], int)
         assert isinstance(row["degrade_pressure_score"], int)
+        assert isinstance(row["debt_pressure_score"], int)
         assert isinstance(row["risk_vector"], int)
 
 
@@ -349,6 +379,7 @@ def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
             -row["handoff_pressure_score"],
             -row["blackout_pressure_score"],
             -row["degrade_pressure_score"],
+            -row["debt_pressure_score"],
             -row["risk_vector"],
             -row["exception_balance_score"],
             -row["dispatchable_billable_duration_ms"],
@@ -402,6 +433,9 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
     total_dispatchable_billable = sum(
         b["dispatchable_billable_duration_ms"] for blocks in windows.values() for b in blocks
     )
+    total_debt_adjusted_dispatchable = sum(
+        b["debt_adjusted_dispatchable_ms"] for blocks in windows.values() for b in blocks
+    )
     assert summary["total_unplanned_downtime_ms"] == total_duration
     assert summary["total_maintenance_overlap_ms"] == total_overlap
     assert summary["total_maintenance_span_count"] == total_spans
@@ -417,6 +451,10 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
     assert summary["total_adjusted_billable_downtime_ms"] == total_adjusted_billable
     assert summary["total_routed_billable_downtime_ms"] == total_routed_billable
     assert summary["total_dispatchable_billable_downtime_ms"] == total_dispatchable_billable
+    assert (
+        summary["total_debt_adjusted_dispatchable_downtime_ms"]
+        == total_debt_adjusted_dispatchable
+    )
 
 
 def test_checksum_fields_match_fixture(summary: dict):
@@ -1066,6 +1104,69 @@ def test_degrade_compaction_and_scope_exercised():
             assert summary["total_degrade_overlap_ms"] == 205
             assert summary["total_degrade_segment_count"] == 2
             assert all("degrade_pressure_score" in row for row in queue)
+    finally:
+        MAINTENANCE_PATH.write_text(original_maint)
+        EXCEPTIONS_PATH.write_text(original_ex)
+        HANDOFF_PATH.write_text(original_handoff)
+        BLACKOUT_PATH.write_text(original_blackout)
+        DEGRADE_PATH.write_text(original_degrade)
+
+
+def test_debt_ledger_propagates_and_decays_between_windows():
+    original_maint = MAINTENANCE_PATH.read_text()
+    original_ex = EXCEPTIONS_PATH.read_text()
+    original_handoff = HANDOFF_PATH.read_text()
+    original_blackout = BLACKOUT_PATH.read_text()
+    original_degrade = DEGRADE_PATH.read_text()
+    try:
+        MAINTENANCE_PATH.write_text("[]\n")
+        EXCEPTIONS_PATH.write_text("[]\n")
+        HANDOFF_PATH.write_text("[]\n")
+        BLACKOUT_PATH.write_text("[]\n")
+        DEGRADE_PATH.write_text("[]\n")
+        rows = [
+            {
+                "incident_id": "d-ledger-1",
+                "service": "auth",
+                "start_ms": 0,
+                "end_ms": 400,
+                "severity": "major",
+                "planned": False,
+            },
+            {
+                "incident_id": "d-ledger-2",
+                "service": "auth",
+                "start_ms": 470,
+                "end_ms": 760,
+                "severity": "major",
+                "planned": False,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            in_path = Path(tmp) / "in.json"
+            out = Path(tmp) / "out"
+            _write_json(in_path, rows)
+            out.mkdir(parents=True, exist_ok=True)
+            result = _run_pipeline(input_path=in_path, output_dir=out)
+            assert result.returncode == 0, result.stderr
+            windows = _load_json(out / "service_windows.json")
+            queue = _load_jsonl(out / "incident_queue.jsonl")
+            summary = _load_json(out / "downtime_summary.json")
+            assert list(windows.keys()) == ["auth"]
+            first, second = windows["auth"]
+            assert first["idle_gap_ms"] == 0
+            assert first["debt_in_ms"] == 0
+            assert first["debt_out_ms"] == 400
+            assert first["debt_adjusted_dispatchable_ms"] == 400
+            assert second["idle_gap_ms"] == 70
+            assert second["debt_in_ms"] == 377
+            assert second["debt_out_ms"] == 667
+            assert second["debt_adjusted_dispatchable_ms"] == 365
+            queue_by_start = {row["start_ms"]: row for row in queue}
+            assert queue_by_start[0]["debt_pressure_score"] == 5
+            assert queue_by_start[470]["debt_pressure_score"] == 11
+            assert summary["max_debt_out_ms"] == 667
+            assert summary["total_debt_adjusted_dispatchable_downtime_ms"] == 765
     finally:
         MAINTENANCE_PATH.write_text(original_maint)
         EXCEPTIONS_PATH.write_text(original_ex)

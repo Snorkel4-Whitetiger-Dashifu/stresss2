@@ -606,6 +606,37 @@ def merge_windows(
                 ).encode("utf-8")
             ).hexdigest()[:10]
 
+        previous_end_ms = 0
+        previous_debt_out_ms = 0
+        for index, block in enumerate(merged):
+            idle_gap_ms = (
+                0
+                if index == 0
+                else max(block["start_ms"] - previous_end_ms, 0)
+            )
+            debt_in_ms = (
+                0
+                if index == 0
+                else max(previous_debt_out_ms - (idle_gap_ms // 3), 0)
+            )
+            debt_adjusted_dispatchable_ms = (
+                block["dispatchable_billable_duration_ms"] + (debt_in_ms // 5)
+            )
+            debt_out_ms = min(
+                debt_in_ms
+                + block["dispatchable_billable_duration_ms"]
+                + (block["handoff_segment_count"] * 20)
+                + (block["blackout_segment_count"] * 25)
+                + (block["degrade_segment_count"] * 15),
+                2500,
+            )
+            block["idle_gap_ms"] = idle_gap_ms
+            block["debt_in_ms"] = debt_in_ms
+            block["debt_out_ms"] = debt_out_ms
+            block["debt_adjusted_dispatchable_ms"] = debt_adjusted_dispatchable_ms
+            previous_end_ms = block["end_ms"]
+            previous_debt_out_ms = debt_out_ms
+
         windows[service] = merged
 
     return windows, planned_excluded_count, maintenance, exceptions, handoffs, blackouts, degrades
@@ -654,7 +685,7 @@ def build_queue(
                 routed_queue_min_ms
                 + degrade_units * policy["degrade_penalty_ms"]
             )
-            if block["dispatchable_billable_duration_ms"] < dispatch_queue_min_ms:
+            if block["debt_adjusted_dispatchable_ms"] < dispatch_queue_min_ms:
                 continue
 
             all_probe_ms = _probe_overlap_ms(
@@ -700,11 +731,15 @@ def build_queue(
                 + (degrade_severity_probe_ms // 23)
                 + block["degrade_segment_count"]
             )
+            debt_pressure_score = (
+                (block["debt_out_ms"] // 80)
+                + (block["debt_in_ms"] // 120)
+            )
 
             exception_balance_score = int(boost_units - suppress_units)
             severity_weight = policy["severity_weight"].get(block["max_severity"], 0)
             escalation_score = (
-                block["dispatchable_billable_duration_ms"] // 60
+                block["debt_adjusted_dispatchable_ms"] // 60
                 + block["incident_count"] * 2
                 + block["critical_incident_count"] * 3
                 + (policy["no_overlap_bonus"] if block["maintenance_overlap_ms"] == 0 else 0)
@@ -713,29 +748,32 @@ def build_queue(
                 + exception_balance_score * 2
                 + handoff_pressure_score * 2
                 + blackout_pressure_score * 2
+                + debt_pressure_score * 2
             )
             risk_vector = (
                 escalation_score
                 + blackout_pressure_score
                 + (degrade_pressure_score * 2)
+                + debt_pressure_score
             )
             if (
                 (
                     block["max_severity"] == "critical"
-                    and block["dispatchable_billable_duration_ms"] >= policy["critical_p1_min_ms"]
+                    and block["debt_adjusted_dispatchable_ms"] >= policy["critical_p1_min_ms"]
                 )
-                or block["dispatchable_billable_duration_ms"] >= policy["critical_threshold_ms"]
+                or block["debt_adjusted_dispatchable_ms"] >= policy["critical_threshold_ms"]
                 or block["critical_incident_count"] >= policy["critical_count_for_critical"]
                 or escalation_score >= policy["score_threshold_critical"]
                 or block["boost_overlap_ms"] >= policy["boost_force_critical_ms"]
                 or block["handoff_overlap_ms"] >= policy["handoff_force_critical_ms"]
                 or block["blackout_overlap_ms"] >= policy["blackout_force_critical_ms"]
                 or block["degrade_overlap_ms"] >= policy["degrade_force_critical_ms"]
+                or block["debt_out_ms"] >= 900
                 or risk_vector >= (policy["score_threshold_critical"] + 4)
             ):
                 priority = "critical"
             elif (
-                block["dispatchable_billable_duration_ms"] >= policy["high_threshold_ms"]
+                block["debt_adjusted_dispatchable_ms"] >= policy["high_threshold_ms"]
                 or (block["incident_count"] >= 3 and block["max_severity"] in {"major", "critical"})
                 or (
                     block["maintenance_overlap_ms"] == 0
@@ -744,23 +782,28 @@ def build_queue(
                 or escalation_score >= policy["score_threshold_high"]
                 or (
                     exception_balance_score > 0
-                    and block["dispatchable_billable_duration_ms"]
+                    and block["debt_adjusted_dispatchable_ms"]
                     >= max(policy["high_threshold_ms"] - policy["boost_high_relief_ms"], 0)
                 )
                 or (
                     handoff_pressure_score > 0
-                    and block["dispatchable_billable_duration_ms"]
+                    and block["debt_adjusted_dispatchable_ms"]
                     >= max(policy["high_threshold_ms"] - policy["handoff_high_relief_ms"], 0)
                 )
                 or (
                     blackout_pressure_score > 0
-                    and block["dispatchable_billable_duration_ms"]
+                    and block["debt_adjusted_dispatchable_ms"]
                     >= max(policy["high_threshold_ms"] - policy["blackout_high_relief_ms"], 0)
                 )
                 or (
                     degrade_pressure_score > 0
-                    and block["dispatchable_billable_duration_ms"]
+                    and block["debt_adjusted_dispatchable_ms"]
                     >= max(policy["high_threshold_ms"] - policy["degrade_high_relief_ms"], 0)
+                )
+                or (
+                    debt_pressure_score > 0
+                    and block["debt_adjusted_dispatchable_ms"]
+                    >= max(policy["high_threshold_ms"] - 35, 0)
                 )
                 or risk_vector >= (policy["score_threshold_high"] + 2)
             ):
@@ -778,14 +821,17 @@ def build_queue(
                     f"{block['handoff_overlap_ms']}|{handoff_pressure_score}|"
                     f"{block['blackout_overlap_ms']}|{blackout_pressure_score}|"
                     f"{routed_queue_min_ms}|{block['degrade_overlap_ms']}|"
-                    f"{degrade_pressure_score}|{dispatch_queue_min_ms}|{exception_balance_score}"
+                    f"{degrade_pressure_score}|{dispatch_queue_min_ms}|"
+                    f"{block['debt_in_ms']}|{block['debt_out_ms']}|"
+                    f"{block['debt_adjusted_dispatchable_ms']}|{debt_pressure_score}|"
+                    f"{exception_balance_score}"
                 ).encode("utf-8")
             ).hexdigest()[:12]
             queue_digest = hashlib.sha1(
                 (
                     f"{service}:{block['start_ms']}-{block['end_ms']}|{priority}|"
                     f"{escalation_score}|{handoff_pressure_score}|{blackout_pressure_score}|"
-                    f"{degrade_pressure_score}|{risk_vector}"
+                    f"{degrade_pressure_score}|{debt_pressure_score}|{risk_vector}"
                 ).encode("utf-8")
             ).hexdigest()[:10]
             rows.append(
@@ -809,6 +855,9 @@ def build_queue(
                     "degrade_overlap_ms": block["degrade_overlap_ms"],
                     "degrade_segment_count": block["degrade_segment_count"],
                     "dispatchable_billable_duration_ms": block["dispatchable_billable_duration_ms"],
+                    "debt_in_ms": block["debt_in_ms"],
+                    "debt_out_ms": block["debt_out_ms"],
+                    "debt_adjusted_dispatchable_ms": block["debt_adjusted_dispatchable_ms"],
                     "incident_count": block["incident_count"],
                     "critical_incident_count": block["critical_incident_count"],
                     "source_incident_ids": block["source_incident_ids"],
@@ -824,6 +873,7 @@ def build_queue(
                     "handoff_pressure_score": handoff_pressure_score,
                     "blackout_pressure_score": blackout_pressure_score,
                     "degrade_pressure_score": degrade_pressure_score,
+                    "debt_pressure_score": debt_pressure_score,
                     "escalation_score": escalation_score,
                     "risk_vector": risk_vector,
                     "priority": priority,
@@ -840,6 +890,7 @@ def build_queue(
             -row["handoff_pressure_score"],
             -row["blackout_pressure_score"],
             -row["degrade_pressure_score"],
+            -row["debt_pressure_score"],
             -row["risk_vector"],
             -row["exception_balance_score"],
             -row["dispatchable_billable_duration_ms"],
@@ -921,6 +972,11 @@ def build_summary(
         for blocks in windows.values()
         for block in blocks
     )
+    total_debt_adjusted_dispatchable = sum(
+        block["debt_adjusted_dispatchable_ms"]
+        for blocks in windows.values()
+        for block in blocks
+    )
     longest_window = max(
         (block["duration_ms"] for blocks in windows.values() for block in blocks),
         default=0,
@@ -948,8 +1004,16 @@ def build_summary(
         (row["degrade_pressure_score"] for row in queue),
         default=0,
     )
+    max_debt_pressure_score = max(
+        (row["debt_pressure_score"] for row in queue),
+        default=0,
+    )
     max_risk_vector = max(
         (row["risk_vector"] for row in queue),
+        default=0,
+    )
+    max_debt_out_ms = max(
+        (block["debt_out_ms"] for blocks in windows.values() for block in blocks),
         default=0,
     )
     canonical_input_checksum = hashlib.sha256(
@@ -1027,6 +1091,7 @@ def build_summary(
         "total_adjusted_billable_downtime_ms": total_adjusted_billable,
         "total_routed_billable_downtime_ms": total_routed_billable,
         "total_dispatchable_billable_downtime_ms": total_dispatchable_billable,
+        "total_debt_adjusted_dispatchable_downtime_ms": total_debt_adjusted_dispatchable,
         "longest_window_ms": longest_window,
         "queued_window_count": len(queue),
         "priority_counts": priority_counts,
@@ -1035,6 +1100,8 @@ def build_summary(
         "max_handoff_pressure_score": max_handoff_pressure_score,
         "max_blackout_pressure_score": max_blackout_pressure_score,
         "max_degrade_pressure_score": max_degrade_pressure_score,
+        "max_debt_pressure_score": max_debt_pressure_score,
+        "max_debt_out_ms": max_debt_out_ms,
         "max_risk_vector": max_risk_vector,
         "planned_excluded_count": planned_excluded_count,
         "critical_window_count": critical_window_count,
