@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.2",
+  "contract_version": "1.3",
   "task_scope": "system-administration / incident-routing",
   "io": {
     "cli": "python3 /app/workflow/compile_outages.py --input PATH --output-dir PATH",
@@ -131,7 +131,9 @@
       "major": 3,
       "minor": 1
     },
-    "override_behavior": "default profile, then service_overrides[service], field-wise merge"
+    "normalization_behavior": "normalize the source default object by starting from policies.defaults and replacing each present integer field after int coercion with fallback 0; merge severity_weight by replacing only present critical/major/minor entries",
+    "override_behavior": "resolve every service profile to a complete policy: start from the normalized default profile, apply the matching service_overrides[canonical_service] fields, and merge a partial severity_weight map by key; omitted fields must remain available and must never raise KeyError",
+    "sparse_source_behavior": "the default object and every service override may omit any field; all omitted fields fall back through the complete defaults above"
   },
   "queue": {
     "identifiers": {
@@ -336,21 +338,91 @@
       "critical",
       "high",
       "medium"
-    ]
+    ],
+    "summary_aggregation_contract": {
+      "raw_incident_count": "number of rows in the selected input JSON before canonicalization",
+      "unique_incident_ids": "number of distinct str(row['incident_id']) values in the raw input",
+      "canonical_incident_count": "number of canonical deduplicated incidents, including planned incidents",
+      "service_count": "number of service keys in service_windows.json; services represented only by planned incidents are absent",
+      "severity_counts": "counts over all canonical incidents, including planned incidents",
+      "window_totals_and_longest": "all duration, overlap, segment, and billable totals plus longest_window_ms are computed over every service window, including windows not admitted to the queue",
+      "queued_window_count_and_priority_counts": "computed over final incident_queue rows only",
+      "queue_maxima": "max_escalation_score, max_exception_balance_score, max_handoff_pressure_score, max_blackout_pressure_score, max_degrade_pressure_score, and max_risk_vector are maxima over final queue rows only; use 0 for an empty queue",
+      "planned_excluded_count": "number of canonical deduplicated incidents whose normalized planned value is true",
+      "critical_window_count": "number of all service windows whose max_severity is critical, whether queued or not"
+    }
   },
   "checksums": {
-    "canonical_input_checksum": "sha256 over canonical incident lines incident_id|service|start_ms|end_ms|severity|planned_int",
-    "queue_signature_checksum": "sha256('|'.join(outage_signature in final queue order))",
-    "queue_digest_checksum": "sha256('|'.join(queue_digest in final queue order))",
-    "maintenance_compaction_checksum": "sha256 over canonical merged maintenance lines service|start_ms|end_ms",
-    "exception_compaction_checksum": "sha256 over canonical compacted exception lines service|action|start_ms|end_ms",
-    "handoff_compaction_checksum": "sha256 over canonical compacted handoff lines service|severity_scope|start_ms|end_ms",
-    "blackout_compaction_checksum": "sha256 over canonical compacted blackout lines service|severity_scope|start_ms|end_ms",
-    "degrade_compaction_checksum": "sha256 over canonical compacted degrade lines service|severity_scope|start_ms|end_ms",
-    "policy_checksum": "sha256 over canonical default+override policy lines including severity weights"
+    "serialization": {
+      "encoding": "UTF-8",
+      "field_delimiter": "|",
+      "line_delimiter": "one LF character (\\n)",
+      "trailing_delimiter": "none: never append LF or | after the final value",
+      "empty_input": "hash the empty byte string",
+      "digest": "lowercase hashlib.sha256(payload.encode('utf-8')).hexdigest()",
+      "planned_encoding": "integer text 1 for normalized true and 0 for normalized false; never JSON true/false"
+    },
+    "canonical_input_checksum": "LF-join incident_id|service|start_ms|end_ms|severity|planned_int rows for canonical incidents sorted by (service ascending,start_ms ascending,str(incident_id) ascending), then SHA-256",
+    "queue_signature_checksum": "join outage_signature values in final queue order with | and no trailing delimiter, then SHA-256",
+    "queue_digest_checksum": "join queue_digest values in final queue order with | and no trailing delimiter, then SHA-256",
+    "maintenance_compaction_checksum": "LF-join service|start_ms|end_ms rows sorted by service ascending then compacted interval (start_ms,end_ms) ascending, then SHA-256",
+    "exception_compaction_checksum": "LF-join service|action|start_ms|end_ms rows sorted by service ascending, action in the explicit order boost then suppress, then compacted interval ascending, then SHA-256",
+    "scoped_compaction_order": "handoff, blackout, and degrade rows are LF-joined as service|severity_scope|start_ms|end_ms, sorted by (service,severity_scope) ascending then compacted interval ascending",
+    "handoff_compaction_checksum": "SHA-256 of scoped_compaction_order rows from handoff data",
+    "blackout_compaction_checksum": "SHA-256 of scoped_compaction_order rows from blackout data",
+    "degrade_compaction_checksum": "SHA-256 of scoped_compaction_order rows from degrade data",
+    "policy_line_field_order": [
+      "profile",
+      "queue_min_effective_ms",
+      "critical_p1_min_ms",
+      "critical_threshold_ms",
+      "high_threshold_ms",
+      "no_overlap_high_duration_ms",
+      "critical_count_for_critical",
+      "no_overlap_bonus",
+      "segment_bonus",
+      "score_threshold_critical",
+      "score_threshold_high",
+      "suppress_penalty_ms",
+      "boost_credit_ms",
+      "suppress_unit_ms",
+      "boost_unit_ms",
+      "min_queue_floor_ms",
+      "boost_force_critical_ms",
+      "boost_high_relief_ms",
+      "handoff_penalty_ms",
+      "handoff_unit_ms",
+      "handoff_force_critical_ms",
+      "handoff_high_relief_ms",
+      "blackout_penalty_ms",
+      "blackout_unit_ms",
+      "blackout_force_critical_ms",
+      "blackout_high_relief_ms",
+      "degrade_penalty_ms",
+      "degrade_unit_ms",
+      "degrade_force_critical_ms",
+      "degrade_high_relief_ms",
+      "severity_weight.critical",
+      "severity_weight.major",
+      "severity_weight.minor"
+    ],
+    "policy_checksum": "resolve complete normalized policies first; emit the default profile line, then one line for every service_overrides key in ascending order using that service key as profile; serialize each line using policy_line_field_order and |, LF-join without a trailing LF, then SHA-256",
+    "test_vectors": {
+      "canonical_payload": "i1|auth|100|200|critical|0\ni2|billing|220|300|major|1",
+      "canonical_sha256": "b344e9fe938f2136f98d4d4302216ea702849b31b183fde435fe6ee69b51b697",
+      "maintenance_payload": "auth|100|200\nauth|250|300",
+      "maintenance_sha256": "6b6b868f8437c1c6b639e2a57a2897fffac814e3ab76fff7e7a26d9ba63ccdf5",
+      "exception_payload": "auth|boost|100|200\nauth|suppress|250|300",
+      "exception_sha256": "6d66639afb88b277460928d5db8a99330e00ca1fa9b38984228108ac3063d8c3",
+      "scoped_payload": "auth|all|100|200\nauth|critical|250|300",
+      "scoped_sha256": "a0951ca8a1c8ad4c3246a5446dc570fa06fab871924896f312a40fd8e1dbb61a",
+      "default_policy_payload": "default|220|280|650|320|450|2|4|1|34|18|40|30|50|50|120|140|40|35|60|150|50|45|70|200|55|30|80|170|45|5|3|1",
+      "default_policy_sha256": "fc2261cb7ae597e6b5a69e368da348e9e95947e7369a62a76c27016f46719d46"
+    }
   },
   "guardrails": {
     "original_snapshot_path": "/app/workflow/.compile_outages.original",
-    "tests_tree_access": "forbidden"
+    "tests_tree_access": "forbidden",
+    "source_token_rule": "the repaired source code, including comments and docstrings, must not contain /tests, expected_outputs.json, or test_outputs.py; runtime reads/imports from the test tree are also forbidden"
   }
 }

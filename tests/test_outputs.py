@@ -26,13 +26,28 @@ EXCEPTIONS_PATH = Path("/app/data/routing_exceptions.json")
 HANDOFF_PATH = Path("/app/data/handoff_windows.json")
 BLACKOUT_PATH = Path("/app/data/blackout_windows.json")
 DEGRADE_PATH = Path("/app/data/degrade_windows.json")
+CONTRACT_PATH = Path("/app/docs/routing_contract.json")
 ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 
 FIXTURE = json.loads(Path("/tests/fixtures/expected_outputs.json").read_text())
+CONTRACT = json.loads(CONTRACT_PATH.read_text())
 BROKEN_PIPELINE_SHA256 = "66d60b3125b19156519a03dfb25cecd23e372b8bdae43906282571d8a5badcb5"
 
 SEVERITY_ORDER = ("critical", "major", "minor")
 PRIORITY_ORDER = ("critical", "high", "medium")
+
+
+def test_checksum_serialization_contract_vectors():
+    vectors = CONTRACT["checksums"]["test_vectors"]
+    for prefix in (
+        "canonical",
+        "maintenance",
+        "exception",
+        "scoped",
+        "default_policy",
+    ):
+        payload = vectors[f"{prefix}_payload"].encode("utf-8")
+        assert hashlib.sha256(payload).hexdigest() == vectors[f"{prefix}_sha256"]
 
 
 def _run_pipeline(
@@ -597,6 +612,33 @@ def test_policy_source_path_affects_output():
             assert len(queue_b) == 0
             assert summary_a["policy_checksum"] != summary_b["policy_checksum"]
             assert len(queue_a) > 0
+    finally:
+        POLICY_PATH.write_text(original)
+
+
+def test_sparse_policy_and_override_inherit_complete_defaults():
+    original = POLICY_PATH.read_text()
+    try:
+        _write_json(
+            POLICY_PATH,
+            {
+                "default": {"suppress_unit_ms": 77},
+                "service_overrides": {"auth": {"queue_min_effective_ms": 205}},
+            },
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "sparse-policy"
+            out.mkdir(parents=True, exist_ok=True)
+            result = _run_pipeline(output_dir=out)
+            assert result.returncode == 0, result.stderr
+            summary = _load_json(out / "downtime_summary.json")
+            queue = _load_jsonl(out / "incident_queue.jsonl")
+            assert len(summary["policy_checksum"]) == 64
+            assert all(
+                row["policy_queue_min_ms"] == 205
+                for row in queue
+                if row["service"] == "auth"
+            )
     finally:
         POLICY_PATH.write_text(original)
 

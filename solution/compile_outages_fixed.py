@@ -179,12 +179,16 @@ def _policy_for_service(service: str, policy_data: dict) -> tuple[str, dict]:
     if not isinstance(raw_override, dict):
         return "default", default_policy
     merged = dict(default_policy)
-    merged.update(_normalize_policy(raw_override))
-    # keep default-provided severity weights when override has partial map
-    if "severity_weight" in raw_override:
-        merged_weights = dict(default_policy["severity_weight"])
-        merged_weights.update(_normalize_policy(raw_override)["severity_weight"])
-        merged["severity_weight"] = merged_weights
+    for key in DEFAULT_POLICY:
+        if key != "severity_weight" and key in raw_override:
+            merged[key] = normalize_ms(raw_override.get(key))
+    merged_weights = dict(default_policy["severity_weight"])
+    raw_weights = raw_override.get("severity_weight")
+    if isinstance(raw_weights, dict):
+        for severity in ("critical", "major", "minor"):
+            if severity in raw_weights:
+                merged_weights[severity] = normalize_ms(raw_weights.get(severity))
+    merged["severity_weight"] = merged_weights
     return service, merged
 
 

@@ -4,4 +4,6 @@ Reconcile incidents with the maintenance, response-policy, routing-exception, ha
 
 Produce exactly `downtime_summary.json`, `service_windows.json`, and compact `incident_queue.jsonl`. `/app/docs/routing_contract.json` is the normative runbook for source paths, normalization, interval semantics, policy resolution, formulas, schemas, identifier payloads, and ordering; match it exactly.
 
-Preserve `/app/workflow/.compile_outages.original` unchanged and do not read or import anything from `/tests`.
+Summary values must be SHA-reproducible, not merely schema-compatible. Follow the runbook’s exact UTF-8 payload fields, row ordering, delimiters, boolean encodings, aggregate domains, and complete policy-line serialization. Resolve sparse policy files and service overrides against the documented defaults field by field, including nested severity weights.
+
+Preserve `/app/workflow/.compile_outages.original` unchanged. Do not read or import verifier artifacts, and do not place the forbidden verifier path or fixture/test filenames listed in the runbook anywhere in repaired source code, including comments and docstrings.
