@@ -8,9 +8,9 @@ RUN apt-get update \
         asciinema \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir \
-        pytest==8.4.1 \
-        pytest-json-ctrf==0.3.5
+COPY requirements.lock /tmp/requirements.lock
+RUN python3 -m pip install --no-cache-dir --no-deps \
+        -r /tmp/requirements.lock
 
 WORKDIR /app
 
