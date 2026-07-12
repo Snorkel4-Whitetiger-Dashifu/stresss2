@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.1",
+  "contract_version": "1.2",
   "task_scope": "system-administration / incident-routing",
   "io": {
     "cli": "python3 /app/workflow/compile_outages.py --input PATH --output-dir PATH",
@@ -37,11 +37,12 @@
       "minor"
     ],
     "int_coercion": "int(str(value).strip()) with fallback 0",
-    "planned_truthy_strings": [
-      "true",
-      "1",
-      "yes"
-    ]
+    "planned_coercion": {
+      "booleans": "preserve the boolean value",
+      "strings": "strip and lowercase; true, 1, and yes become true; every other string becomes false",
+      "other_types": "use Python bool(value): null and numeric 0 become false; nonzero numbers and other truthy values become true",
+      "planned_excluded_count": "count canonical deduplicated rows whose normalized planned value is true; for example planned=2 is excluded and planned=null is not"
+    }
   },
   "dedupe": {
     "group_by": "incident_id",
@@ -59,7 +60,9 @@
     "maintenance_compaction_rule": "per service, merge touching intervals if next.start_ms <= current.end_ms",
     "exceptions_compaction_rule": "per (service, action), merge touching intervals if next.start_ms <= current.end_ms",
     "scope_compaction_rule": "per (service, severity_scope), merge touching intervals if next.start_ms <= current.end_ms",
-    "overlap_formula": "max(0, min(end_a, end_b) - max(start_a, start_b))",
+    "interval_semantics": "all source and overlap intervals are half-open [start_ms,end_ms); rows with end_ms <= start_ms are discarded",
+    "overlap_formula": "max(0, min(end_a, end_b) - max(start_a, start_b)); endpoint-only contact contributes 0ms",
+    "scoped_window_overlap_contract": "for handoff, blackout, and degrade, select compacted intervals for (service, all) and (service, window.max_severity), clip both sets to the outage window, discard zero-duration clips, union and compact the combined clips using the touching merge rule, then set overlap_ms to the union duration and segment_count to the number of combined union segments. Thus an all-scope clip ending at 240 and a matching-severity clip starting at 240 form one segment, not two.",
     "domains_order": [
       "maintenance",
       "exceptions",
@@ -71,7 +74,7 @@
       "suppress",
       "boost"
     ],
-    "exceptions_precedence": "boost overlap wins over suppress overlap",
+    "exceptions_precedence": "compute half-open suppress and boost overlap spans, union each action's spans independently, assign all boost union duration to boost_overlap_ms, and subtract the duration of the suppress/boost intersection from suppression_overlap_ms; boost therefore wins intersection time",
     "scope_values": [
       "all",
       "major",
@@ -135,7 +138,15 @@
       "window_signature": "first 10 lowercase hex chars of sha1(service|start_ms|end_ms|comma_joined_source_incident_ids|max_severity|handoff_segment_count|blackout_segment_count|degrade_segment_count)",
       "window_id": "service:start_ms-end_ms",
       "policy_profile": "string 'default' for default policy or canonical normalized service name for service override profile; no prefixes/suffixes",
-      "policy_queue_min_ms": "equal to selected profile's queue_min_effective_ms before unit penalties/credits"
+      "policy_queue_min_ms": "equal to selected profile's queue_min_effective_ms before unit penalties/credits",
+      "outage_signature": "first 12 lowercase hex chars of sha1(service|start_ms|end_ms|comma_joined_source_incident_ids|window_signature|max_severity|maintenance_span_count|policy_profile|suppression_overlap_ms|boost_overlap_ms|effective_queue_min_ms|adjusted_queue_min_ms|handoff_overlap_ms|handoff_pressure_score|blackout_overlap_ms|blackout_pressure_score|routed_queue_min_ms|degrade_overlap_ms|degrade_pressure_score|dispatch_queue_min_ms|exception_balance_score)",
+      "queue_digest": "first 10 lowercase hex chars of sha1(window_id|priority|escalation_score|handoff_pressure_score|blackout_pressure_score|degrade_pressure_score|risk_vector)",
+      "identifier_test_vectors": {
+        "outage_signature_payload": "search|100|400|h1|abc123def0|critical|0|default|0|0|220|220|200|11|0|0|220|0|0|220|0",
+        "outage_signature": "db8f19f9c0f4",
+        "queue_digest_payload": "search:100-400|high|20|3|4|5|37",
+        "queue_digest": "16dbc3b362"
+      }
     },
     "units": {
       "suppress_units": "0 when suppression_overlap_ms == 0 else ceil(suppression_overlap_ms / max(suppress_unit_ms, 1))",
@@ -163,8 +174,28 @@
       "risk_vector": "escalation_score + blackout_pressure_score + (degrade_pressure_score * 2)"
     },
     "priority": {
-      "critical": "apply any critical trigger from thresholds, counts, force thresholds, or risk_vector >= score_threshold_critical + 4",
-      "high": "apply any high trigger from thresholds, counts, no-overlap duration, score threshold, relief thresholds, or risk_vector >= score_threshold_high + 2",
+      "critical_any": [
+        "max_severity == critical and dispatchable_billable_duration_ms >= critical_p1_min_ms",
+        "dispatchable_billable_duration_ms >= critical_threshold_ms",
+        "critical_incident_count >= critical_count_for_critical",
+        "escalation_score >= score_threshold_critical",
+        "boost_overlap_ms >= boost_force_critical_ms",
+        "handoff_overlap_ms >= handoff_force_critical_ms",
+        "blackout_overlap_ms >= blackout_force_critical_ms",
+        "degrade_overlap_ms >= degrade_force_critical_ms",
+        "risk_vector >= score_threshold_critical + 4"
+      ],
+      "high_any_if_not_critical": [
+        "dispatchable_billable_duration_ms >= high_threshold_ms",
+        "incident_count >= 3 and max_severity in {major, critical}",
+        "maintenance_overlap_ms == 0 and duration_ms >= no_overlap_high_duration_ms",
+        "escalation_score >= score_threshold_high",
+        "exception_balance_score > 0 and dispatchable_billable_duration_ms >= max(high_threshold_ms - boost_high_relief_ms, 0)",
+        "handoff_pressure_score > 0 and dispatchable_billable_duration_ms >= max(high_threshold_ms - handoff_high_relief_ms, 0)",
+        "blackout_pressure_score > 0 and dispatchable_billable_duration_ms >= max(high_threshold_ms - blackout_high_relief_ms, 0)",
+        "degrade_pressure_score > 0 and dispatchable_billable_duration_ms >= max(high_threshold_ms - degrade_high_relief_ms, 0)",
+        "risk_vector >= score_threshold_high + 2"
+      ],
       "fallback": "medium"
     },
     "sort_order": [

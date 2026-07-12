@@ -40,9 +40,12 @@ You must match that contract exactly.
 
 Important clarifications that are also normative in the contract:
 - `window_signature` is a 10-character truncated SHA-1 identifier (not a full hash and not a descriptive label).
+- `outage_signature` is the first 12 lowercase SHA-1 hex characters; `queue_digest` is the first 10. Their exact payloads and test vectors are in the contract.
 - `downtime_summary.json` uses a flat top-level schema; required aggregate/checksum fields are not nested under helper objects.
 - `billable_duration_ms` is maintenance-only, while handoff/blackout/degrade attenuation applies sequentially to adjusted/routed/dispatchable billable fields.
 - `policy_profile` is serialized as `default` or the canonical service name for overrides (no prefixes).
+- Intervals are half-open. Handoff/blackout/degrade segment counts come from the compacted union of matching `all` and maximum-severity overlap spans.
+- Normalize `planned` before dedupe and exclusion; nonzero numeric values such as `2` are true.
 
 ## Guardrails
 - Keep `/app/workflow/.compile_outages.original` unchanged.
