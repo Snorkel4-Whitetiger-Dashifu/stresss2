@@ -151,18 +151,22 @@ def test_output_dir_contains_exactly_three_files():
 
 
 def test_primary_summary_exact_fixture(summary: dict):
+    """downtime_summary.json from the primary input matches its canonical SHA-256 exactly."""
     assert _stable_json_hash(summary) == FIXTURE["primary_summary_sha256"]
 
 
 def test_primary_windows_exact_fixture(windows: dict[str, list[dict]]):
+    """service_windows.json from the primary input matches its canonical SHA-256 exactly."""
     assert _stable_json_hash(windows) == FIXTURE["primary_windows_sha256"]
 
 
 def test_primary_queue_exact_fixture(queue_rows: list[dict]):
+    """incident_queue.jsonl from the primary input matches its canonical SHA-256 exactly."""
     assert _stable_jsonl_hash(queue_rows) == FIXTURE["primary_queue_sha256"]
 
 
 def test_alternate_input_exact_fixture():
+    """Outputs computed from the unseen alternate input match their canonical SHA-256 hashes."""
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "alt"
         out.mkdir(parents=True, exist_ok=True)

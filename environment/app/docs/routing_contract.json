@@ -19,132 +19,6 @@
       "incident_queue.jsonl"
     ]
   },
-  "normalization": {
-    "service_aliases": {
-      "authentication": "auth",
-      "payments": "billing",
-      "search-api": "search"
-    },
-    "severity_allowed": [
-      "critical",
-      "major",
-      "minor"
-    ],
-    "severity_default": "minor",
-    "severity_rank_desc": [
-      "critical",
-      "major",
-      "minor"
-    ],
-    "int_coercion": "int(str(value).strip()) with fallback 0",
-    "planned_coercion": {
-      "booleans": "preserve the boolean value",
-      "strings": "strip and lowercase; true, 1, and yes become true; every other string becomes false",
-      "other_types": "use Python bool(value): null and numeric 0 become false; nonzero numbers and other truthy values become true",
-      "planned_excluded_count": "count canonical deduplicated rows whose normalized planned value is true; for example planned=2 is excluded and planned=null is not"
-    }
-  },
-  "dedupe": {
-    "group_by": "incident_id",
-    "keep_rule": [
-      "max end_ms",
-      "max severity rank",
-      "prefer planned == false",
-      "max start_ms",
-      "max service lexicographically"
-    ]
-  },
-  "windowing": {
-    "incident_merge_source": "unplanned incidents only",
-    "incident_stitch_rule": "merge if next.start_ms <= current.end_ms + 30",
-    "maintenance_compaction_rule": "per service, merge touching intervals if next.start_ms <= current.end_ms",
-    "exceptions_compaction_rule": "per (service, action), merge touching intervals if next.start_ms <= current.end_ms",
-    "scope_compaction_rule": "per (service, severity_scope), merge touching intervals if next.start_ms <= current.end_ms",
-    "interval_semantics": "all source and overlap intervals are half-open [start_ms,end_ms); rows with end_ms <= start_ms are discarded",
-    "overlap_formula": "max(0, min(end_a, end_b) - max(start_a, start_b)); endpoint-only contact contributes 0ms",
-    "scoped_window_overlap_contract": "for handoff, blackout, and degrade, select compacted intervals for (service, all) and (service, window.max_severity), clip both sets to the outage window, discard zero-duration clips, union and compact the combined clips using the touching merge rule, then set overlap_ms to the union duration and segment_count to the number of combined union segments. Thus an all-scope clip ending at 240 and a matching-severity clip starting at 240 form one segment, not two.",
-    "domains_order": [
-      "maintenance",
-      "exceptions",
-      "handoff",
-      "blackout",
-      "degrade"
-    ],
-    "exceptions_actions_allowed": [
-      "suppress",
-      "boost"
-    ],
-    "exceptions_precedence": "compute half-open suppress and boost overlap spans, union each action's spans independently, assign all boost union duration to boost_overlap_ms, and subtract the duration of the suppress/boost intersection from suppression_overlap_ms; boost therefore wins intersection time",
-    "scope_values": [
-      "all",
-      "major",
-      "critical"
-    ],
-    "attenuation": {
-      "billable_duration_ms": "max(duration_ms - maintenance_overlap_ms, 0)",
-      "adjusted_billable_duration_ms": "max(billable_duration_ms - (handoff_overlap_ms // 2), 0)",
-      "routed_billable_duration_ms": "max(adjusted_billable_duration_ms - (blackout_overlap_ms // 3), 0)",
-      "dispatchable_billable_duration_ms": "max(routed_billable_duration_ms - (degrade_overlap_ms // 4), 0)"
-    },
-    "debt_ledger": {
-      "evaluation_scope": "state is independent per normalized service",
-      "evaluation_order": "process each service's merged windows in start_ms ascending order after all attenuation fields are finalized",
-      "first_window": "idle_gap_ms=0, debt_in_ms=0",
-      "idle_gap_ms": "for later windows max(current.start_ms-previous.end_ms,0)",
-      "debt_in_ms": "max(previous.debt_out_ms-(idle_gap_ms//3),0)",
-      "debt_adjusted_dispatchable_ms": "dispatchable_billable_duration_ms + (debt_in_ms//5)",
-      "debt_out_ms": "min(debt_in_ms + dispatchable_billable_duration_ms + handoff_segment_count*20 + blackout_segment_count*25 + degrade_segment_count*15, 2500)",
-      "state_update": "finalize debt_out_ms for one window before evaluating the next window in the same service"
-    },
-    "billable_field_order_contract": [
-      "billable_duration_ms depends only on duration_ms and maintenance_overlap_ms",
-      "suppression_overlap_ms and boost_overlap_ms are tracked separately and do not directly change billable_duration_ms",
-      "adjusted_billable_duration_ms depends only on billable_duration_ms and handoff_overlap_ms",
-      "routed_billable_duration_ms depends only on adjusted_billable_duration_ms and blackout_overlap_ms",
-      "dispatchable_billable_duration_ms depends only on routed_billable_duration_ms and degrade_overlap_ms"
-    ]
-  },
-  "policies": {
-    "defaults": {
-      "queue_min_effective_ms": 220,
-      "critical_p1_min_ms": 280,
-      "critical_threshold_ms": 650,
-      "high_threshold_ms": 320,
-      "no_overlap_high_duration_ms": 450,
-      "critical_count_for_critical": 2,
-      "no_overlap_bonus": 4,
-      "segment_bonus": 1,
-      "score_threshold_critical": 34,
-      "score_threshold_high": 18,
-      "suppress_penalty_ms": 40,
-      "boost_credit_ms": 30,
-      "suppress_unit_ms": 50,
-      "boost_unit_ms": 50,
-      "min_queue_floor_ms": 120,
-      "boost_force_critical_ms": 140,
-      "boost_high_relief_ms": 40,
-      "handoff_penalty_ms": 35,
-      "handoff_unit_ms": 60,
-      "handoff_force_critical_ms": 150,
-      "handoff_high_relief_ms": 50,
-      "blackout_penalty_ms": 45,
-      "blackout_unit_ms": 70,
-      "blackout_force_critical_ms": 200,
-      "blackout_high_relief_ms": 55,
-      "degrade_penalty_ms": 30,
-      "degrade_unit_ms": 80,
-      "degrade_force_critical_ms": 170,
-      "degrade_high_relief_ms": 45
-    },
-    "severity_weight_defaults": {
-      "critical": 5,
-      "major": 3,
-      "minor": 1
-    },
-    "normalization_behavior": "normalize the source default object by starting from policies.defaults and replacing each present integer field after int coercion with fallback 0; merge severity_weight by replacing only present critical/major/minor entries",
-    "override_behavior": "resolve every service profile to a complete policy: start from the normalized default profile, apply the matching service_overrides[canonical_service] fields, and merge a partial severity_weight map by key; omitted fields must remain available and must never raise KeyError",
-    "sparse_source_behavior": "the default object and every service override may omit any field; all omitted fields fall back through the complete defaults above"
-  },
   "queue": {
     "identifiers": {
       "window_signature": "first 10 lowercase hex chars of sha1(service|start_ms|end_ms|comma_joined_source_incident_ids|max_severity|handoff_segment_count|blackout_segment_count|degrade_segment_count)",
@@ -159,78 +33,7 @@
         "queue_digest_payload": "search:100-400|high|28|3|4|5|2|39",
         "queue_digest": "f7280dae86"
       }
-    },
-    "units": {
-      "suppress_units": "0 when suppression_overlap_ms == 0 else ceil(suppression_overlap_ms / max(suppress_unit_ms, 1))",
-      "boost_units": "boost_overlap_ms // max(boost_unit_ms, 1)",
-      "handoff_units": "handoff_overlap_ms // max(handoff_unit_ms, 1)",
-      "blackout_units": "blackout_overlap_ms // max(blackout_unit_ms, 1)",
-      "degrade_units": "degrade_overlap_ms // max(degrade_unit_ms, 1)"
-    },
-    "thresholds": {
-      "effective_queue_min_ms": "max(queue_min_effective_ms + suppress_units*suppress_penalty_ms - boost_units*boost_credit_ms, min_queue_floor_ms)",
-      "adjusted_queue_min_ms": "effective_queue_min_ms + handoff_units*handoff_penalty_ms",
-      "routed_queue_min_ms": "adjusted_queue_min_ms + blackout_units*blackout_penalty_ms",
-      "dispatch_queue_min_ms": "routed_queue_min_ms + degrade_units*degrade_penalty_ms"
-    },
-    "include_rule": "debt_adjusted_dispatchable_ms >= dispatch_queue_min_ms",
-    "scores": {
-      "exception_balance_score": "boost_units - suppress_units",
-      "handoff_pressure_score_probe": "[end_ms-180, end_ms+1)",
-      "blackout_pressure_score_probe": "[end_ms-240, end_ms+1)",
-      "degrade_pressure_score_probe": "[end_ms-210, end_ms+1)",
-      "handoff_pressure_score": "(all_probe_ms // 30) + (severity_probe_ms // 20) + handoff_segment_count",
-      "blackout_pressure_score": "(all_probe_ms // 36) + (severity_probe_ms // 24) + blackout_segment_count",
-      "degrade_pressure_score": "(all_probe_ms // 34) + (severity_probe_ms // 23) + degrade_segment_count",
-      "debt_pressure_score": "(debt_out_ms // 80) + (debt_in_ms // 120)",
-      "escalation_score": "(debt_adjusted_dispatchable_ms // 60) + incident_count*2 + critical_incident_count*3 + (maintenance_overlap_ms==0 ? no_overlap_bonus : 0) + maintenance_span_count*segment_bonus + severity_weight[max_severity] + exception_balance_score*2 + handoff_pressure_score*2 + blackout_pressure_score*2 + debt_pressure_score*2",
-      "risk_vector": "escalation_score + blackout_pressure_score + (degrade_pressure_score * 2) + debt_pressure_score"
-    },
-    "priority": {
-      "critical_any": [
-        "max_severity == critical and debt_adjusted_dispatchable_ms >= critical_p1_min_ms",
-        "debt_adjusted_dispatchable_ms >= critical_threshold_ms",
-        "critical_incident_count >= critical_count_for_critical",
-        "escalation_score >= score_threshold_critical",
-        "boost_overlap_ms >= boost_force_critical_ms",
-        "handoff_overlap_ms >= handoff_force_critical_ms",
-        "blackout_overlap_ms >= blackout_force_critical_ms",
-        "degrade_overlap_ms >= degrade_force_critical_ms",
-        "debt_out_ms >= 900",
-        "risk_vector >= score_threshold_critical + 4"
-      ],
-      "high_any_if_not_critical": [
-        "debt_adjusted_dispatchable_ms >= high_threshold_ms",
-        "incident_count >= 3 and max_severity in {major, critical}",
-        "maintenance_overlap_ms == 0 and duration_ms >= no_overlap_high_duration_ms",
-        "escalation_score >= score_threshold_high",
-        "exception_balance_score > 0 and debt_adjusted_dispatchable_ms >= max(high_threshold_ms - boost_high_relief_ms, 0)",
-        "handoff_pressure_score > 0 and debt_adjusted_dispatchable_ms >= max(high_threshold_ms - handoff_high_relief_ms, 0)",
-        "blackout_pressure_score > 0 and debt_adjusted_dispatchable_ms >= max(high_threshold_ms - blackout_high_relief_ms, 0)",
-        "degrade_pressure_score > 0 and debt_adjusted_dispatchable_ms >= max(high_threshold_ms - degrade_high_relief_ms, 0)",
-        "debt_pressure_score > 0 and debt_adjusted_dispatchable_ms >= max(high_threshold_ms - 35, 0)",
-        "risk_vector >= score_threshold_high + 2"
-      ],
-      "fallback": "medium"
-    },
-    "sort_order": [
-      "priority (critical > high > medium)",
-      "escalation_score desc",
-      "handoff_pressure_score desc",
-      "blackout_pressure_score desc",
-      "degrade_pressure_score desc",
-      "debt_pressure_score desc",
-      "risk_vector desc",
-      "exception_balance_score desc",
-      "dispatchable_billable_duration_ms desc",
-      "routed_billable_duration_ms desc",
-      "adjusted_billable_duration_ms desc",
-      "critical_incident_count desc",
-      "maintenance_span_count desc",
-      "incident_count desc",
-      "service asc",
-      "start_ms asc"
-    ]
+    }
   },
   "schemas": {
     "service_windows_exact_keys": [
@@ -452,5 +255,9 @@
     "original_snapshot_path": "/app/workflow/.compile_outages.original",
     "tests_tree_access": "forbidden",
     "source_token_rule": "the repaired source code, including comments and docstrings, must not contain /tests, expected_outputs.json, or test_outputs.py; runtime reads/imports from the test tree are also forbidden"
+  },
+  "semantics_source": {
+    "notes": "This document is the output contract only: file paths, schemas, exact key sets, identifier payloads and checksum encodings. It does NOT define how values are derived.",
+    "authority": "Normalization, dedupe tie-breaks, interval and overlap semantics, domain ordering, policy resolution, attenuation, the debt ledger, unit and threshold math, scoring, priority rules and queue ordering were settled by the change-advisory board; the authoritative record is /app/incident/rollout_review_log.md. Where an early draft proposal conflicts with a later CAB decision, the later decision wins."
   }
 }
