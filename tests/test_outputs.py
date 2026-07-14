@@ -112,11 +112,25 @@ def _stable_jsonl_hash(rows: list[dict]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _reset_output_dir() -> None:
+    """Recreate /app/output while preserving its ownership and mode.
+
+    The deployment state (owner/group/mode of /app/output) is itself under
+    test, so harness resets must not destroy it.
+    """
+    if OUTPUT_DIR.exists():
+        info = OUTPUT_DIR.stat()
+        shutil.rmtree(OUTPUT_DIR)
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        os.chown(OUTPUT_DIR, info.st_uid, info.st_gid)
+        os.chmod(OUTPUT_DIR, info.st_mode & 0o7777)
+    else:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _prepare_outputs():
-    if OUTPUT_DIR.exists():
-        shutil.rmtree(OUTPUT_DIR)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    _reset_output_dir()
     result = _run_pipeline()
     assert result.returncode == 0, result.stderr
 
@@ -589,9 +603,7 @@ def test_cli_defaults_work_and_match_explicit_run():
         explicit = _run_pipeline(input_path=INPUT_PATH, output_dir=explicit_out)
         assert explicit.returncode == 0, explicit.stderr
 
-        if OUTPUT_DIR.exists():
-            shutil.rmtree(OUTPUT_DIR)
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        _reset_output_dir()
 
         implicit = subprocess.run(["python3", str(PIPELINE)], capture_output=True, text=True, timeout=60)
         assert implicit.returncode == 0, implicit.stderr
@@ -1255,3 +1267,81 @@ def test_effective_queue_threshold_uses_exception_units_and_ceil_suppress():
         BLACKOUT_PATH.write_text(original_blackout)
         DEGRADE_PATH.write_text(original_degrade)
 
+
+
+WRAPPER_PATH = Path("/usr/local/bin/compile-outages")
+LOCK_PATH = Path("/var/lock/outage-compile.lock")
+CRON_PATH = Path("/etc/cron.d/outage-compile")
+CRON_LINE = (
+    "*/5 * * * * svc-outage /usr/local/bin/compile-outages "
+    "--input /app/data/outages.json --output-dir /app/output"
+)
+
+
+def test_service_account_provisioned():
+    """The svc-outage system account exists with a non-interactive shell."""
+    import pwd
+
+    entry = pwd.getpwnam("svc-outage")
+    assert entry.pw_shell in ("/usr/sbin/nologin", "/sbin/nologin", "/bin/false")
+
+
+def test_stale_compile_lock_cleared():
+    """The stale rollout lock under /var/lock has been removed."""
+    assert not LOCK_PATH.exists()
+
+
+def test_wrapper_installed_and_functional(tmp_path_factory):
+    """The operator wrapper is executable, targets the live compiler, and runs it."""
+    assert WRAPPER_PATH.exists()
+    mode = WRAPPER_PATH.stat().st_mode
+    assert mode & 0o111, "wrapper must be executable"
+    source = WRAPPER_PATH.read_text()
+    assert ".legacy" not in source
+    out_dir = tmp_path_factory.mktemp("wrapper_out")
+    result = subprocess.run(
+        [str(WRAPPER_PATH), "--input", str(INPUT_PATH), "--output-dir", str(out_dir)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    for name in ("downtime_summary.json", "service_windows.json", "incident_queue.jsonl"):
+        assert (out_dir / name).exists()
+
+
+def test_wrapper_honors_compile_lock(tmp_path_factory):
+    """With the lock present the wrapper exits 75 and writes nothing."""
+    out_dir = tmp_path_factory.mktemp("locked_out")
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LOCK_PATH.write_text("999999\n")
+    try:
+        result = subprocess.run(
+            [str(WRAPPER_PATH), "--input", str(INPUT_PATH), "--output-dir", str(out_dir)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result.returncode == 75
+        assert not (out_dir / "downtime_summary.json").exists()
+    finally:
+        LOCK_PATH.unlink(missing_ok=True)
+
+
+def test_cron_schedule_installed():
+    """The cron drop-in exists with mode 0644 and the exact runbook job line."""
+    assert CRON_PATH.exists()
+    assert (CRON_PATH.stat().st_mode & 0o777) == 0o644
+    lines = [line.strip() for line in CRON_PATH.read_text().splitlines() if line.strip()]
+    assert CRON_LINE in lines
+
+
+def test_output_dir_ownership_and_mode():
+    """/app/output is owned by svc-outage with mode 0750."""
+    import pwd
+
+    entry = pwd.getpwnam("svc-outage")
+    info = OUTPUT_DIR.stat()
+    assert info.st_uid == entry.pw_uid
+    assert info.st_gid == entry.pw_gid
+    assert (info.st_mode & 0o777) == 0o750
