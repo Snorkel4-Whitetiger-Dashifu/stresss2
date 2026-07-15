@@ -509,6 +509,7 @@ Shift lead logged routine rollout observation for billing (west) during review w
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
 
 ### Review entry 0122 — search lane
+> **Change-review decision (2026-04-16 - CAB-2116)** Dana: final queue ordering is priority tier, then dispatchable_billable_duration_ms descending, then service ascending — a short, coarse key that avoids the pressure-score comparisons. *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for search (north) during review window 0122. Escalation bridge reviewed stale runbook links; owners pinged to refresh links before the next drill.
 No compiler semantics were changed in this entry; parameters remain as approved by the change board.
 
@@ -1951,7 +1952,7 @@ Historical CSV escalation exports remain archived and non-authoritative for the 
 ### Review entry 0477 — edge lane
 Shift lead logged routine rollout observation for edge (west) during review window 0477. Quarterly audit sampled acknowledgment records; no compiler-relevant findings for this lane.
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
-> **Change-review decision (2026-05-13 - CAB-2233)** Ilya: final queue ordering, applied strictly in sequence: priority (critical > high > medium); then escalation_score desc; then handoff_pressure_score desc; then blackout_pressure_score desc; then degrade_pressure_score desc; then debt_pressure_score desc; then risk_vector desc; then exception_balance_score desc; then dispatchable_billable_duration_ms desc; then routed_billable_duration_ms desc; then adjusted_billable_duration_ms desc; then critical_incident_count desc; then maintenance_span_count desc; then incident_count desc; then service asc; then start_ms asc.
+> **Change-review decision (2026-05-13 - CAB-2233)** Ilya: final queue ordering, applied strictly in sequence — this full 16-key order is final and revises the coarse 3-key ordering in CAB-2116: priority (critical > high > medium); then escalation_score desc; then handoff_pressure_score desc; then blackout_pressure_score desc; then degrade_pressure_score desc; then debt_pressure_score desc; then risk_vector desc; then exception_balance_score desc; then dispatchable_billable_duration_ms desc; then routed_billable_duration_ms desc; then adjusted_billable_duration_ms desc; then critical_incident_count desc; then maintenance_span_count desc; then incident_count desc; then service asc; then start_ms asc.
 
 ### Review entry 0478 — notifications lane
 Shift lead logged routine rollout observation for notifications (north) during review window 0478. Noise review: duplicate page storm traced to a flapping health check, muted at the source.
