@@ -31,7 +31,7 @@ ALT_INPUT_PATH = Path("/tests/fixtures/alt_outages.json")
 
 FIXTURE = json.loads(Path("/tests/fixtures/expected_outputs.json").read_text())
 CONTRACT = json.loads(CONTRACT_PATH.read_text())
-BROKEN_PIPELINE_SHA256 = "66d60b3125b19156519a03dfb25cecd23e372b8bdae43906282571d8a5badcb5"
+BROKEN_PIPELINE_SHA256 = "ba98cdc968f603a73aa76964ff1e03549d7f5b9b93cac3de3be7f81252433d28"
 
 SEVERITY_ORDER = ("critical", "major", "minor")
 PRIORITY_ORDER = ("critical", "high", "medium")
