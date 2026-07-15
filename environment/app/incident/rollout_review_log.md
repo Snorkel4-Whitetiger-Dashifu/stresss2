@@ -415,6 +415,7 @@ Shift lead logged routine rollout observation for checkout (central) during revi
 Thread archived; see the CAB decision log entries for anything affecting compile behavior.
 
 ### Review entry 0100 — inventory lane
+> **Change-review decision (2026-04-02 - CAB-2102)** Dana: attenuation divides overlaps as handoff // 3, blackout // 4, degrade // 5. *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for inventory (east) during review window 0100. Paging drill completed within SLO; acknowledgment latency p95 held under the rollout target.
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 
@@ -431,6 +432,7 @@ Shift lead logged routine rollout observation for ledger (central) during review
 Thread archived; see the CAB decision log entries for anything affecting compile behavior.
 
 ### Review entry 0104 — auth lane
+> **Change-review decision (2026-04-06 - CAB-2106)** Dana: responder debt decays by half the idle gap, caps at 2200, and credits segments at 15/20/10 for handoff/blackout/degrade. *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for auth (east) during review window 0104. Vendor paging webhook retried twice before delivery; within contractual retry budget.
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 
@@ -447,6 +449,7 @@ Shift lead logged routine rollout observation for checkout (central) during revi
 Thread archived; see the CAB decision log entries for anything affecting compile behavior.
 
 ### Review entry 0108 — inventory lane
+> **Change-review decision (2026-04-10 - CAB-2110)** Tomas: every unit conversion rounds down, including suppress units. *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for inventory (east) during review window 0108. Noise review: duplicate page storm traced to a flapping health check, muted at the source.
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 
@@ -463,6 +466,7 @@ Shift lead logged routine rollout observation for ledger (central) during review
 Thread archived; see the CAB decision log entries for anything affecting compile behavior.
 
 ### Review entry 0112 — auth lane
+> **Change-review decision (2026-04-14 - CAB-2114)** Tomas: queue admission compares debt-adjusted dispatchability against effective_queue_min_ms alone; no further threshold escalation applies. *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for auth (east) during review window 0112. Escalation bridge reviewed stale runbook links; owners pinged to refresh links before the next drill.
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 
@@ -479,6 +483,7 @@ Shift lead logged routine rollout observation for checkout (central) during revi
 Thread archived; see the CAB decision log entries for anything affecting compile behavior.
 
 ### Review entry 0116 — inventory lane
+> **Change-review decision (2026-04-18 - CAB-2118)** Dana: incident windows merge only when the next incident starts at or before the current window's end, with no grace interval. *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for inventory (east) during review window 0116. Rotation swap requested and approved; no change to escalation policy parameters.
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 
@@ -911,7 +916,7 @@ Reviewers should reconcile behavior questions against the CAB decision entries r
 ### Review entry 0222 — notifications lane
 Shift lead logged routine rollout observation for notifications (north) during review window 0222. Escalation bridge reviewed stale runbook links; owners pinged to refresh links before the next drill.
 No compiler semantics were changed in this entry; parameters remain as approved by the change board.
-> **Change-review decision (2026-05-05 - CAB-2210)** Ilya: window construction uses unplanned incidents only; stitch rule: merge if next.start_ms <= current.end_ms + 30. Maintenance compaction: per service, merge touching intervals if next.start_ms <= current.end_ms. Exceptions compaction: per (service, action), merge touching intervals if next.start_ms <= current.end_ms. Scoped compaction: per (service, severity_scope), merge touching intervals if next.start_ms <= current.end_ms.
+> **Change-review decision (2026-05-05 - CAB-2210)** Ilya: window construction uses unplanned incidents only; stitch rule: merge if next.start_ms <= current.end_ms + 30 — the 30ms grace interval is final and revises CAB-2118. Maintenance compaction: per service, merge touching intervals if next.start_ms <= current.end_ms. Exceptions compaction: per (service, action), merge touching intervals if next.start_ms <= current.end_ms. Scoped compaction: per (service, severity_scope), merge touching intervals if next.start_ms <= current.end_ms.
 
 ### Review entry 0223 — ledger lane
 Shift lead logged routine rollout observation for ledger (central) during review window 0223. On-call handoff rehearsal ran clean; no gaps observed in the rotation calendar for this lane.
@@ -1187,7 +1192,7 @@ Reviewers should reconcile behavior questions against the CAB decision entries r
 ### Review entry 0290 — search lane
 Shift lead logged routine rollout observation for search (north) during review window 0290. Paging drill completed within SLO; acknowledgment latency p95 held under the rollout target.
 No compiler semantics were changed in this entry; parameters remain as approved by the change board.
-> **Change-review decision (2026-05-07 - CAB-2216)** Priya: attenuation chain: `billable_duration_ms` = max(duration_ms - maintenance_overlap_ms, 0); `adjusted_billable_duration_ms` = max(billable_duration_ms - (handoff_overlap_ms // 2), 0); `routed_billable_duration_ms` = max(adjusted_billable_duration_ms - (blackout_overlap_ms // 3), 0); `dispatchable_billable_duration_ms` = max(routed_billable_duration_ms - (degrade_overlap_ms // 4), 0). This supersedes CAB-1924.
+> **Change-review decision (2026-05-07 - CAB-2216)** Priya: attenuation chain: `billable_duration_ms` = max(duration_ms - maintenance_overlap_ms, 0); `adjusted_billable_duration_ms` = max(billable_duration_ms - (handoff_overlap_ms // 2), 0); `routed_billable_duration_ms` = max(adjusted_billable_duration_ms - (blackout_overlap_ms // 3), 0); `dispatchable_billable_duration_ms` = max(routed_billable_duration_ms - (degrade_overlap_ms // 4), 0). The 2/3/4 divisors are final and revise CAB-2102. This supersedes CAB-1924.
 
 ### Review entry 0291 — checkout lane
 Shift lead logged routine rollout observation for checkout (central) during review window 0291. Dashboard tiles for responder load lagged during the sync window; attributed to cache refresh, not the compiler.
@@ -1325,7 +1330,7 @@ Thread archived; see the CAB decision log entries for anything affecting compile
 ### Review entry 0324 — inventory lane
 Shift lead logged routine rollout observation for inventory (east) during review window 0324. Vendor paging webhook retried twice before delivery; within contractual retry budget.
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
-> **Change-review decision (2026-05-08 - CAB-2219)** Marta: debt ledger: state is independent per normalized service; process each service's merged windows in start_ms ascending order after all attenuation fields are finalized. First window: idle_gap_ms=0, debt_in_ms=0. `idle_gap_ms`: for later windows max(current.start_ms-previous.end_ms,0). `debt_in_ms` = max(previous.debt_out_ms-(idle_gap_ms//3),0). `debt_adjusted_dispatchable_ms` = dispatchable_billable_duration_ms + (debt_in_ms//5). `debt_out_ms` = min(debt_in_ms + dispatchable_billable_duration_ms + handoff_segment_count*20 + blackout_segment_count*25 + degrade_segment_count*15, 2500). finalize debt_out_ms for one window before evaluating the next window in the same service. This supersedes CAB-1928.
+> **Change-review decision (2026-05-08 - CAB-2219)** Marta: debt ledger: state is independent per normalized service; process each service's merged windows in start_ms ascending order after all attenuation fields are finalized. First window: idle_gap_ms=0, debt_in_ms=0. `idle_gap_ms`: for later windows max(current.start_ms-previous.end_ms,0). `debt_in_ms` = max(previous.debt_out_ms-(idle_gap_ms//3),0). `debt_adjusted_dispatchable_ms` = dispatchable_billable_duration_ms + (debt_in_ms//5). `debt_out_ms` = min(debt_in_ms + dispatchable_billable_duration_ms + handoff_segment_count*20 + blackout_segment_count*25 + degrade_segment_count*15, 2500). finalize debt_out_ms for one window before evaluating the next window in the same service. The one-third idle decay, the 2500 cap, and the 20/25/15 segment credits are final and revise CAB-2106. This supersedes CAB-1928.
 
 ### Review entry 0325 — edge lane
 Shift lead logged routine rollout observation for edge (west) during review window 0325. Synthetic incident injection verified pager delivery for secondary responders in this region.
@@ -1532,7 +1537,7 @@ No compiler semantics were changed in this entry; parameters remain as approved 
 ### Review entry 0375 — ledger lane
 Shift lead logged routine rollout observation for ledger (central) during review window 0375. Synthetic incident injection verified pager delivery for secondary responders in this region.
 Thread archived; see the CAB decision log entries for anything affecting compile behavior.
-> **Change-review decision (2026-05-10 - CAB-2224)** Ilya: unit conversions: `suppress_units` = 0 when suppression_overlap_ms == 0 else ceil(suppression_overlap_ms / max(suppress_unit_ms, 1)); `boost_units` = boost_overlap_ms // max(boost_unit_ms, 1); `handoff_units` = handoff_overlap_ms // max(handoff_unit_ms, 1); `blackout_units` = blackout_overlap_ms // max(blackout_unit_ms, 1); `degrade_units` = degrade_overlap_ms // max(degrade_unit_ms, 1). Note suppress rounds up; every other unit rounds down.
+> **Change-review decision (2026-05-10 - CAB-2224)** Ilya: unit conversions: `suppress_units` = 0 when suppression_overlap_ms == 0 else ceil(suppression_overlap_ms / max(suppress_unit_ms, 1)); `boost_units` = boost_overlap_ms // max(boost_unit_ms, 1); `handoff_units` = handoff_overlap_ms // max(handoff_unit_ms, 1); `blackout_units` = blackout_overlap_ms // max(blackout_unit_ms, 1); `degrade_units` = degrade_overlap_ms // max(degrade_unit_ms, 1). Note suppress rounds up; every other unit rounds down — this revises the all-floor rule in CAB-2110.
 
 ### Review entry 0376 — auth lane
 Shift lead logged routine rollout observation for auth (east) during review window 0376. Rotation swap requested and approved; no change to escalation policy parameters.
@@ -1601,7 +1606,7 @@ Thread archived; see the CAB decision log entries for anything affecting compile
 ### Review entry 0392 — auth lane
 Shift lead logged routine rollout observation for auth (east) during review window 0392. Escalation bridge reviewed stale runbook links; owners pinged to refresh links before the next drill.
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
-> **Change-review decision (2026-05-10 - CAB-2225)** Ilya: queue admission thresholds build in four steps: `effective_queue_min_ms` = max(queue_min_effective_ms + suppress_units*suppress_penalty_ms - boost_units*boost_credit_ms, min_queue_floor_ms); `adjusted_queue_min_ms` = effective_queue_min_ms + handoff_units*handoff_penalty_ms; `routed_queue_min_ms` = adjusted_queue_min_ms + blackout_units*blackout_penalty_ms; `dispatch_queue_min_ms` = routed_queue_min_ms + degrade_units*degrade_penalty_ms. A window enters the queue only when debt_adjusted_dispatchable_ms >= dispatch_queue_min_ms.
+> **Change-review decision (2026-05-10 - CAB-2225)** Ilya: queue admission thresholds build in four steps: `effective_queue_min_ms` = max(queue_min_effective_ms + suppress_units*suppress_penalty_ms - boost_units*boost_credit_ms, min_queue_floor_ms); `adjusted_queue_min_ms` = effective_queue_min_ms + handoff_units*handoff_penalty_ms; `routed_queue_min_ms` = adjusted_queue_min_ms + blackout_units*blackout_penalty_ms; `dispatch_queue_min_ms` = routed_queue_min_ms + degrade_units*degrade_penalty_ms. A window enters the queue only when debt_adjusted_dispatchable_ms >= dispatch_queue_min_ms — the full four-step chain is final and revises CAB-2114.
 
 ### Review entry 0393 — billing lane
 Shift lead logged routine rollout observation for billing (west) during review window 0393. On-call handoff rehearsal ran clean; no gaps observed in the rotation calendar for this lane.

@@ -38,6 +38,7 @@ PRIORITY_ORDER = ("critical", "high", "medium")
 
 
 def test_checksum_serialization_contract_vectors():
+    """The contract's checksum test vectors reproduce under the specified serialization."""
     vectors = CONTRACT["checksums"]["test_vectors"]
     for prefix in (
         "canonical",
@@ -51,6 +52,7 @@ def test_checksum_serialization_contract_vectors():
 
 
 def test_identifier_contract_vectors():
+    """The contract's identifier test vectors reproduce under the specified payload encoding."""
     vectors = CONTRACT["queue"]["identifiers"]["identifier_test_vectors"]
     assert (
         hashlib.sha1(vectors["outage_signature_payload"].encode("utf-8")).hexdigest()[:12]
@@ -151,15 +153,18 @@ def queue_rows() -> list[dict]:
 
 
 def test_cli_exists():
+    """The outage compiler exists at its operational path."""
     assert PIPELINE.exists(), f"pipeline missing at {PIPELINE}"
 
 
 def test_outputs_exist():
+    """A compile run produces all three required output files."""
     for path in (SUMMARY_PATH, WINDOWS_PATH, QUEUE_PATH):
         assert path.exists(), f"missing required output: {path}"
 
 
 def test_output_dir_contains_exactly_three_files():
+    """The output directory contains exactly the three contract files, nothing else."""
     names = {p.name for p in OUTPUT_DIR.iterdir() if p.is_file()}
     assert names == {"downtime_summary.json", "service_windows.json", "incident_queue.jsonl"}
 
@@ -198,6 +203,7 @@ def test_alternate_input_exact_fixture():
 
 
 def test_summary_schema_and_order(summary: dict):
+    """downtime_summary.json carries exactly the contract keys with required orderings."""
     assert set(summary.keys()) == {
         "schema_version",
         "raw_incident_count",
@@ -259,6 +265,7 @@ def test_summary_schema_and_order(summary: dict):
 
 
 def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
+    """service_windows.json is a service-keyed map of sorted window rows with exact keys."""
     expected_keys = {
         "start_ms",
         "end_ms",
@@ -319,6 +326,7 @@ def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
 
 
 def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
+    """Queue rows carry exactly the required fields with valid identifier lengths."""
     expected = {
         "window_id",
         "service",
@@ -373,6 +381,7 @@ def test_queue_required_fields_and_lengths(queue_rows: list[dict]):
 
 
 def test_priority_rules_are_enforced(queue_rows: list[dict]):
+    """Queue priorities follow the decided critical/high/medium rules."""
     for row in queue_rows:
         assert row["debt_adjusted_dispatchable_ms"] >= row["dispatch_queue_min_ms"]
         assert row["dispatch_queue_min_ms"] >= row["routed_queue_min_ms"]
@@ -389,6 +398,7 @@ def test_priority_rules_are_enforced(queue_rows: list[dict]):
 
 
 def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
+    """The queue is ordered by the full decided tie-break sequence."""
     rank = {name: i for i, name in enumerate(PRIORITY_ORDER)}
     sort_keys = [
         (
@@ -415,6 +425,7 @@ def test_queue_sorted_with_all_tiebreaks(queue_rows: list[dict]):
 
 
 def test_jsonl_compact_format():
+    """incident_queue.jsonl uses compact JSON separators."""
     for line in QUEUE_PATH.read_text().splitlines():
         if not line.strip():
             continue
@@ -424,6 +435,7 @@ def test_jsonl_compact_format():
 
 
 def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dict]]):
+    """Window arithmetic stays internally consistent across attenuation layers."""
     total_duration = sum(b["duration_ms"] for blocks in windows.values() for b in blocks)
     total_overlap = sum(b["maintenance_overlap_ms"] for blocks in windows.values() for b in blocks)
     total_spans = sum(b["maintenance_span_count"] for blocks in windows.values() for b in blocks)
@@ -476,6 +488,7 @@ def test_maintenance_math_consistency(summary: dict, windows: dict[str, list[dic
 
 
 def test_checksum_fields_match_fixture(summary: dict):
+    """Summary checksum fields match canonical values."""
     assert len(summary["canonical_input_checksum"]) == 64
     assert len(summary["queue_signature_checksum"]) == 64
     assert len(summary["maintenance_compaction_checksum"]) == 64
@@ -488,12 +501,14 @@ def test_checksum_fields_match_fixture(summary: dict):
 
 
 def test_original_snapshot_preserved():
+    """The frozen broken compiler snapshot is untouched."""
     assert ORIGINAL_PIPELINE.exists()
     digest = hashlib.sha256(ORIGINAL_PIPELINE.read_bytes()).hexdigest()
     assert digest == BROKEN_PIPELINE_SHA256
 
 
 def test_pipeline_does_not_reference_test_artifacts():
+    """The repaired compiler never references verifier artifacts."""
     code = PIPELINE.read_text()
     for token in ("/tests", "expected_outputs.json", "test_outputs.py"):
         assert token not in code
@@ -561,6 +576,7 @@ def test_pipeline_runtime_does_not_read_tests_tree():
 
 
 def test_broken_snapshot_is_wrong():
+    """The broken snapshot genuinely produces different output."""
     with tempfile.TemporaryDirectory() as tmp:
         broken = Path(tmp) / "compile_outages.py"
         out = Path(tmp) / "broken_out"
@@ -576,6 +592,7 @@ def test_broken_snapshot_is_wrong():
 
 
 def test_pipeline_rerun_idempotent(summary: dict, windows: dict[str, list[dict]], queue_rows: list[dict]):
+    """Recompiling the same input reproduces identical output."""
     with tempfile.TemporaryDirectory() as tmp:
         rerun = Path(tmp) / "rerun"
         rerun.mkdir(parents=True, exist_ok=True)
@@ -587,6 +604,7 @@ def test_pipeline_rerun_idempotent(summary: dict, windows: dict[str, list[dict]]
 
 
 def test_pipeline_supports_custom_output_dir():
+    """The compiler honors a custom output directory."""
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "custom"
         out.mkdir(parents=True, exist_ok=True)
@@ -597,6 +615,7 @@ def test_pipeline_supports_custom_output_dir():
 
 
 def test_cli_defaults_work_and_match_explicit_run():
+    """Default CLI arguments produce the same output as explicit ones."""
     with tempfile.TemporaryDirectory() as tmp:
         explicit_out = Path(tmp) / "explicit"
         explicit_out.mkdir(parents=True, exist_ok=True)

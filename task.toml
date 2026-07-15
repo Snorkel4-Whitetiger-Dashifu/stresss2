@@ -9,7 +9,7 @@ subcategories = []
 number_of_milestones = 0
 codebase_size = "minimal"
 languages = ["python"]
-tags = ["sre", "service-recovery", "cron", "permissions", "incident-response", "on-call-routing"]
+tags = ["service-recovery", "cron", "permissions", "incident-response", "on-call-routing"]
 expert_time_estimate_min = 240
 junior_time_estimate_min = 540
 
