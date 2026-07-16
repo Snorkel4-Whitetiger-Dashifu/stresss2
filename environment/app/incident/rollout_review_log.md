@@ -2085,3 +2085,318 @@ Reviewers should reconcile behavior questions against the CAB decision entries r
 ### Review entry 0510 — notifications lane
 Shift lead logged routine rollout observation for notifications (north) during review window 0510. Paging drill completed within SLO; acknowledgment latency p95 held under the rollout target.
 No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+
+## Communications Retro — Rollout Incident (filed 2026-05-29)
+The comms retro examined how decisions traveled during the rollout incident, because two early misimplementations traced to engineers acting on chat summaries rather than ticketed CAB decisions. The board's decisions were consistently correct at the ticket level, but paraphrases posted to the incident channel dropped qualifiers — most notably scope restrictions — and those paraphrases were what several implementers read. Three practices were adopted. First, decision announcements in chat must link the ticket and quote its operative sentence verbatim, with paraphrase labeled non-authoritative. Second, the weekly digest pilots a superseded-by column so anyone skimming can see which February drafts and later-revised interim positions were overturned without reconstructing the chain by hand. Third, the incident channel's pinned post now states the reading rule that governs this archive: where an earlier proposal and a later decision disagree, the later decision governs, and the ticketed record — not chat — is the source of truth. The retro reaffirmed that no communications practice changes compile semantics; the tickets remain the only mechanism by which behavior changes.
+
+
+> **Change-review decision (2026-05-25 - CAB-2240)** Priya: responder dashboards retain ninety days of window history; older windows are served from the artifact archive on demand. Dashboard retention is an operational setting and carries no weight in compile output.
+
+> **Change-review decision (2026-05-28 - CAB-2243)** Marta: artifact bundles must record output signatures at export time and again at archive ingest; a mismatch quarantines the bundle for manual review. Evidence handling only; artifact contents are unaffected.
+
+
+### Review entry 0511 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0511. Quarterly access recertification for the routing dashboards closed with one dormant reviewer account disabled; no service principals were touched. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0512 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0512. A typo fix in the contract reference doc was merged; reviewers confirmed it altered prose only, not any key set.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0513 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0513. The ops channel piloted a weekly digest of CAB decisions; the pilot continues through quarter end.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0514 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0514. The board reconfirmed that lane-local experiments must not write to the shared evidence store. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0515 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0515. Capacity review noted outage-record volume trending up week over week; the board declined to adjust anything outside the CAB process.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0516 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0516. An audit pass matched queue artifacts against their recorded signatures; no mismatches were observed.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+### Review entry 0517 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0517. Two junior reviewers completed shadowing rotations and joined the secondary review pool. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0518 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0518. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0519 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0519. Backlog grooming closed five informational tickets referencing the pre-rollout compiler; none carried behavior decisions.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0520 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0520. A staleness monitor was tuned to stop double-paging when a dashboard refresh overlaps a deploy. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0521 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0521. Change-window grooming returned three stale exception approvals to their owners for re-justification before the next cycle.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0522 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0522. A drill prep note asked lanes to verify their escalation trees before the Q2 exercise; four lanes confirmed same day.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+### Review entry 0523 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0523. The drill scribe rotated per the roster; minutes were filed the same business day. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0524 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0524. A status-page webhook flapped once during the window; the retry queue absorbed it and no routing decision was involved.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0525 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0525. Pager noise stayed within the SLO; the single page during the window was acknowledged inside four minutes.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0526 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0526. A stale wiki bookmark still pointed at deprecated compiler notes; the link was retired. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0527 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0527. The on-call handoff template gained a checklist row for confirming the responder dashboard is live before accepting the rotation.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0528 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0528. The dashboard TLS certificate was rotated ahead of expiry; tiles rendered stale for one refresh and recovered without intervention.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+
+## Q2 Tabletop Exercise — Minutes (2026-06-04)
+The quarterly tabletop walked the outage-to-responder path end to end with the compiler treated as a black box: a synthetic outage burst was injected into a staging replica and each lane's on-call narrated their actions from the artifacts alone. Facilitators stopped the clock four times. The first stop tested whether responders could distinguish a suppressed window from a queued one using only the queue artifact and the runbook; every lane answered correctly, though two took over five minutes, and the board asked for a one-page reading guide rather than any change to the artifacts. The second stop simulated a stale dashboard during an active page; the on-call correctly fell back to the queue file on disk, noted as intended behavior since the dashboard is a projection, never the record. The third stop was a deliberately misrouted escalation where the paged lane did not own the affected service; the handoff completed in under two minutes using the escalation tree verified in prep. The final stop rehearsed evidence preservation: responders exported the queue and summary artifacts, recorded their signatures in the incident channel, and confirmed the frozen snapshot remained untouched. Action items: publish the reading guide, add the signature-recording step to the runbook appendix, and repeat with the secondary pool as primary. The board minuted explicitly that no action item touches compile behavior; all semantics remain exactly as ticketed.
+
+
+> **Change-review decision (2026-06-03 - CAB-2246)** Dana: quarterly access recertification for the routing path samples service-to-service grants at twice the standard rate through year end. Access policy; no compiler impact.
+
+
+### Review entry 0529 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0529. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0530 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0530. Metrics ingest lagged for nine minutes during the collector restart; window math was unaffected because the compiler reads recorded outage times, not ingest times.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0531 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0531. Retention sampling of archived queue artifacts passed spot audit; one bundle was re-indexed for slow retrieval.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0532 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0532. A reviewer flagged two chat excerpts that contradicted a ticketed decision; the thread was annotated to point at the ticket as authoritative. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0533 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0533. Quarterly access recertification for the routing dashboards closed with one dormant reviewer account disabled; no service principals were touched.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0534 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0534. A typo fix in the contract reference doc was merged; reviewers confirmed it altered prose only, not any key set.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+### Review entry 0535 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0535. The ops channel piloted a weekly digest of CAB decisions; the pilot continues through quarter end. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0536 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0536. The board reconfirmed that lane-local experiments must not write to the shared evidence store.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0537 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0537. Capacity review noted outage-record volume trending up week over week; the board declined to adjust anything outside the CAB process.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0538 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0538. An audit pass matched queue artifacts against their recorded signatures; no mismatches were observed. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0539 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0539. Two junior reviewers completed shadowing rotations and joined the secondary review pool.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0540 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0540. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+### Review entry 0541 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0541. Backlog grooming closed five informational tickets referencing the pre-rollout compiler; none carried behavior decisions. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0542 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0542. A staleness monitor was tuned to stop double-paging when a dashboard refresh overlaps a deploy.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0543 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0543. Change-window grooming returned three stale exception approvals to their owners for re-justification before the next cycle.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0544 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0544. A drill prep note asked lanes to verify their escalation trees before the Q2 exercise; four lanes confirmed same day. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0545 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0545. The drill scribe rotated per the roster; minutes were filed the same business day.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0546 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0546. A status-page webhook flapped once during the window; the retry queue absorbed it and no routing decision was involved.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+
+## Access Review Appendix — 2026-06 Cycle
+The June access review covered every principal with write access to the routing path. The rollout-era automation account remained disabled with credentials expired and no login attempts since containment; the artifact bucket's writer list matched the roster after one contractor account was removed at engagement end; the dashboard service account retained read-only scopes with token rotation verified against the ninety-day policy; and the break-glass account passed its quarterly seal check, countersigned by two leads. One follow-up: a legacy CI role carried a stale policy attachment referencing the pre-rollout compiler path — no active trust relationships, removed same day through the standard change process. Ten sampled permission grants from the quarter all carried ticket references and approver signatures. The board accepted the appendix without dissent and doubled the service-to-service sampling rate for next cycle as a precaution following the rollout incident. Nothing in this appendix modifies how the compiler computes, admits, or orders responder work.
+
+
+> **Change-review decision (2026-06-06 - CAB-2249)** Ilya: the weekly CAB digest becomes a standing publication with a superseded-by column. Communications practice only; the ticketed decisions remain the sole authority on compile behavior.
+
+
+### Review entry 0547 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0547. Pager noise stayed within the SLO; the single page during the window was acknowledged inside four minutes. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0548 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0548. A stale wiki bookmark still pointed at deprecated compiler notes; the link was retired.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0549 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0549. The on-call handoff template gained a checklist row for confirming the responder dashboard is live before accepting the rotation.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0550 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0550. The dashboard TLS certificate was rotated ahead of expiry; tiles rendered stale for one refresh and recovered without intervention. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0551 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0551. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0552 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0552. Metrics ingest lagged for nine minutes during the collector restart; window math was unaffected because the compiler reads recorded outage times, not ingest times.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+### Review entry 0553 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0553. Retention sampling of archived queue artifacts passed spot audit; one bundle was re-indexed for slow retrieval. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0554 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0554. A reviewer flagged two chat excerpts that contradicted a ticketed decision; the thread was annotated to point at the ticket as authoritative.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0555 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0555. Quarterly access recertification for the routing dashboards closed with one dormant reviewer account disabled; no service principals were touched.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0556 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0556. A typo fix in the contract reference doc was merged; reviewers confirmed it altered prose only, not any key set. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0557 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0557. The ops channel piloted a weekly digest of CAB decisions; the pilot continues through quarter end.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0558 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0558. The board reconfirmed that lane-local experiments must not write to the shared evidence store.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+### Review entry 0559 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0559. Capacity review noted outage-record volume trending up week over week; the board declined to adjust anything outside the CAB process. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0560 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0560. An audit pass matched queue artifacts against their recorded signatures; no mismatches were observed.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0561 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0561. Two junior reviewers completed shadowing rotations and joined the secondary review pool.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0562 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0562. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0563 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0563. Backlog grooming closed five informational tickets referencing the pre-rollout compiler; none carried behavior decisions.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0564 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0564. A staleness monitor was tuned to stop double-paging when a dashboard refresh overlaps a deploy.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+
+### Review entry 0565 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0565. Change-window grooming returned three stale exception approvals to their owners for re-justification before the next cycle. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0566 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0566. A drill prep note asked lanes to verify their escalation trees before the Q2 exercise; four lanes confirmed same day.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0567 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0567. The drill scribe rotated per the roster; minutes were filed the same business day.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0568 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0568. A status-page webhook flapped once during the window; the retry queue absorbed it and no routing decision was involved. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0569 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0569. Pager noise stayed within the SLO; the single page during the window was acknowledged inside four minutes.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0570 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0570. A stale wiki bookmark still pointed at deprecated compiler notes; the link was retired.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+### Review entry 0571 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0571. The on-call handoff template gained a checklist row for confirming the responder dashboard is live before accepting the rotation. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0572 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0572. The dashboard TLS certificate was rotated ahead of expiry; tiles rendered stale for one refresh and recovered without intervention.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0573 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0573. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0574 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0574. Metrics ingest lagged for nine minutes during the collector restart; window math was unaffected because the compiler reads recorded outage times, not ingest times. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0575 — auth lane
+Shift lead logged routine rollout observation for auth (east) during review window 0575. Retention sampling of archived queue artifacts passed spot audit; one bundle was re-indexed for slow retrieval.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0576 — billing lane
+Shift lead logged routine rollout observation for billing (west) during review window 0576. A reviewer flagged two chat excerpts that contradicted a ticketed decision; the thread was annotated to point at the ticket as authoritative.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+
+### Review entry 0577 — checkout lane
+Shift lead logged routine rollout observation for checkout (central) during review window 0577. Quarterly access recertification for the routing dashboards closed with one dormant reviewer account disabled; no service principals were touched. The wrapper-script drill completed inside its budget; the runbook timing stands with no change requested.
+Historical CSV exports remain archived and non-authoritative for the JSON compiler acceptance.
+
+### Review entry 0578 — edge lane
+Shift lead logged routine rollout observation for edge (west) during review window 0578. A typo fix in the contract reference doc was merged; reviewers confirmed it altered prose only, not any key set.
+Thread archived; see the CAB decision entries for anything affecting compile behavior.
+
+### Review entry 0579 — inventory lane
+Shift lead logged routine rollout observation for inventory (east) during review window 0579. The ops channel piloted a weekly digest of CAB decisions; the pilot continues through quarter end.
+No compiler semantics were changed in this entry; parameters remain as approved by the change board.
+
+### Review entry 0580 — ledger lane
+Shift lead logged routine rollout observation for ledger (central) during review window 0580. The board reconfirmed that lane-local experiments must not write to the shared evidence store. Log-retention verification confirmed the ninety-day tier is intact; nothing in the compile path reads beyond thirty days.
+Filed for context only; the authoritative record for compile behavior stays with the CAB tickets.
+
+### Review entry 0581 — notifications lane
+Shift lead logged routine rollout observation for notifications (north) during review window 0581. Capacity review noted outage-record volume trending up week over week; the board declined to adjust anything outside the CAB process.
+Nothing in this window altered thresholds, priority, or ordering; those remain governed by the ticketed decisions.
+
+### Review entry 0582 — search lane
+Shift lead logged routine rollout observation for search (north) during review window 0582. An audit pass matched queue artifacts against their recorded signatures; no mismatches were observed.
+Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
