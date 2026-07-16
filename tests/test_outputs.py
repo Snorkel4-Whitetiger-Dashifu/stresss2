@@ -1210,6 +1210,61 @@ def test_debt_ledger_propagates_and_decays_between_windows():
         DEGRADE_PATH.write_text(original_degrade)
 
 
+def test_debt_ledger_resets_after_extended_idle_gap():
+    """An idle gap at or beyond the reset threshold zeroes debt_in_ms instead of decaying it."""
+    original_maint = MAINTENANCE_PATH.read_text()
+    original_ex = EXCEPTIONS_PATH.read_text()
+    original_handoff = HANDOFF_PATH.read_text()
+    original_blackout = BLACKOUT_PATH.read_text()
+    original_degrade = DEGRADE_PATH.read_text()
+    try:
+        MAINTENANCE_PATH.write_text("[]\n")
+        EXCEPTIONS_PATH.write_text("[]\n")
+        HANDOFF_PATH.write_text("[]\n")
+        BLACKOUT_PATH.write_text("[]\n")
+        DEGRADE_PATH.write_text("[]\n")
+        rows = [
+            {
+                "incident_id": "d-reset-1",
+                "service": "auth",
+                "start_ms": 0,
+                "end_ms": 400,
+                "severity": "major",
+                "planned": False,
+            },
+            {
+                "incident_id": "d-reset-2",
+                "service": "auth",
+                "start_ms": 1100,
+                "end_ms": 1400,
+                "severity": "major",
+                "planned": False,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            in_path = Path(tmp) / "in.json"
+            out = Path(tmp) / "out"
+            _write_json(in_path, rows)
+            out.mkdir(parents=True, exist_ok=True)
+            result = _run_pipeline(input_path=in_path, output_dir=out)
+            assert result.returncode == 0, result.stderr
+            windows = _load_json(out / "service_windows.json")
+            first, second = windows["auth"]
+            assert first["debt_out_ms"] == 400
+            # Gap of 700 is at or beyond the reset threshold: the ledger clears
+            # outright rather than decaying to max(400 - 700 // 3, 0) == 167.
+            assert second["idle_gap_ms"] == 700
+            assert second["debt_in_ms"] == 0
+            assert second["debt_out_ms"] == 300
+            assert second["debt_adjusted_dispatchable_ms"] == 300
+    finally:
+        MAINTENANCE_PATH.write_text(original_maint)
+        EXCEPTIONS_PATH.write_text(original_ex)
+        HANDOFF_PATH.write_text(original_handoff)
+        BLACKOUT_PATH.write_text(original_blackout)
+        DEGRADE_PATH.write_text(original_degrade)
+
+
 def test_effective_queue_threshold_uses_exception_units_and_ceil_suppress():
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()

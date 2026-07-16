@@ -616,7 +616,7 @@ def merge_windows(
             )
             debt_in_ms = (
                 0
-                if index == 0
+                if index == 0 or idle_gap_ms >= 600
                 else max(previous_debt_out_ms - (idle_gap_ms // 3), 0)
             )
             debt_adjusted_dispatchable_ms = (

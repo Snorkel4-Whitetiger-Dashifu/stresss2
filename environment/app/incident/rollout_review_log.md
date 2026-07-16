@@ -2009,6 +2009,7 @@ No compiler semantics were changed in this entry; parameters remain as approved 
 ### Review entry 0491 — checkout lane
 Shift lead logged routine rollout observation for checkout (central) during review window 0491. Dashboard tiles for responder load lagged during the sync window; attributed to cache refresh, not the compiler.
 Thread archived; see the CAB decision log entries for anything affecting compile behavior.
+> **Change-review decision (2026-05-16 - CAB-2236)** Marta: closing the extended-quiet thread from the 0491 review — proportional decay leaves stale debt on the books when a service goes quiet for a long stretch, so the ledger now resets outright past a threshold: when `idle_gap_ms` is 600 or greater, `debt_in_ms` is 0 for that window instead of `max(previous.debt_out_ms - (idle_gap_ms // 3), 0)`. Below 600 the one-third decay stands exactly as written. This reset revises CAB-2219; the 2500 cap and the 20/25/15 segment credits there are unaffected.
 
 ### Review entry 0492 — inventory lane
 Shift lead logged routine rollout observation for inventory (east) during review window 0492. Escalation bridge reviewed stale runbook links; owners pinged to refresh links before the next drill.
