@@ -412,6 +412,8 @@ Historical CSV escalation exports remain archived and non-authoritative for the 
 
 > **Rollout draft proposal (2026-02-27 - CAB-1932)** Tomas: escalation_score should weight debt_adjusted_dispatchable_ms // 50, incident_count once, critical_incident_count twice, and count each pressure score a single time rather than doubling any of them *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
 
+> **Rollout draft proposal (2026-02-28 - CAB-1934)** Tomas: queue admission thresholds — compute `effective_queue_min_ms = queue_min_effective_ms + suppress_units*suppress_penalty_ms - boost_units*boost_credit_ms` with no floor at that step, add the handoff, blackout and degrade unit penalties in turn, and apply the `min_queue_floor_ms` floor once at the very end to the final `dispatch_queue_min_ms` *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
+
 ### Review entry 0097 — billing lane
 Shift lead logged routine rollout observation for billing (west) during review window 0097. Quarterly audit sampled acknowledgment records; no compiler-relevant findings for this lane.
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.

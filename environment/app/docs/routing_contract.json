@@ -172,6 +172,7 @@
     ],
     "source_incident_ids_type": "array of unique string incident ids sorted ascending in service_windows and incident_queue; use comma_joined_source_incident_ids only inside signature/checksum payloads",
     "summary_aggregation_contract": {
+      "recoverability_note": "Every summary field except the four in summary_field_recovery is a plain aggregate (sum, count, or maximum) over the exact-matched service_windows.json and incident_queue.jsonl rows per the per-field rules below, so no additional worked example is needed for them: once those two outputs are correct, each summary aggregate is fully determined by this contract. summary_field_recovery covers only the four fields (canonical_incident_count, severity_counts, planned_excluded_count, canonical_input_checksum) that depend on planned incidents and therefore never surface in the window or queue outputs.",
       "raw_incident_count": "number of rows in the selected input JSON before canonicalization",
       "unique_incident_ids": "number of distinct str(row['incident_id']) values in the raw input",
       "canonical_incident_count": "number of canonical deduplicated incidents, including planned incidents",
