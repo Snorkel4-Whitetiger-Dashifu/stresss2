@@ -27,7 +27,10 @@
       "policy_queue_min_ms": "equal to selected profile's queue_min_effective_ms before unit penalties/credits",
       "outage_signature": "first 12 lowercase hex chars of sha1(service|start_ms|end_ms|comma_joined_source_incident_ids|window_signature|max_severity|maintenance_span_count|policy_profile|suppression_overlap_ms|boost_overlap_ms|effective_queue_min_ms|adjusted_queue_min_ms|handoff_overlap_ms|handoff_pressure_score|blackout_overlap_ms|blackout_pressure_score|routed_queue_min_ms|degrade_overlap_ms|degrade_pressure_score|dispatch_queue_min_ms|debt_in_ms|debt_out_ms|debt_adjusted_dispatchable_ms|debt_pressure_score|exception_balance_score)",
       "queue_digest": "first 10 lowercase hex chars of sha1(window_id|priority|escalation_score|handoff_pressure_score|blackout_pressure_score|degrade_pressure_score|debt_pressure_score|risk_vector)",
+      "identifier_note": "window_signature, outage_signature and queue_digest are TRUNCATED sha1 hex digests — 10, 12 and 10 lowercase hex characters respectively — NOT full-length hashes. Do not emit a 40-char sha1 or a 64-char sha256 for these fields; truncate to the stated length. This is distinct from the summary checksum fields, which are full 64-char sha256 digests.",
       "identifier_test_vectors": {
+        "window_signature_payload": "search|100|400|h1|critical|0|0|0",
+        "window_signature": "f83923a455",
         "outage_signature_payload": "search|100|400|h1|abc123def0|critical|0|default|0|0|220|220|200|11|0|0|220|0|0|220|0|120|244|244|4",
         "outage_signature": "b102278d8f58",
         "queue_digest_payload": "search:100-400|high|28|3|4|5|2|39",

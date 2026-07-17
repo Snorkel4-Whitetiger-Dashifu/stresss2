@@ -55,6 +55,11 @@ def test_identifier_contract_vectors():
     """The contract's identifier test vectors reproduce under the specified payload encoding."""
     vectors = CONTRACT["queue"]["identifiers"]["identifier_test_vectors"]
     assert (
+        hashlib.sha1(vectors["window_signature_payload"].encode("utf-8")).hexdigest()[:10]
+        == vectors["window_signature"]
+    )
+    assert len(vectors["window_signature"]) == 10
+    assert (
         hashlib.sha1(vectors["outage_signature_payload"].encode("utf-8")).hexdigest()[:12]
         == vectors["outage_signature"]
     )
