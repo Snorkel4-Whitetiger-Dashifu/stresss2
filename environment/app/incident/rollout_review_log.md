@@ -304,6 +304,8 @@ Shift lead logged routine rollout observation for auth (east) during review wind
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 > **Rollout draft proposal (2026-02-20 - CAB-1921)** Tomas: when suppress and boost spans intersect, the intersection stays with suppress — suppression is safety-critical *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
 
+> **Rollout draft proposal (2026-02-21 - CAB-1922)** Dana: for scoped attenuation (handoff, blackout, degrade), clip the all-scope compacted intervals and the matching-severity compacted intervals to the window separately, add the two clipped durations to get overlap_ms, and set segment_count to the total count of clips across both scopes — do not merge the two scopes together *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
+
 ### Review entry 0073 — billing lane
 Shift lead logged routine rollout observation for billing (west) during review window 0073. On-call handoff rehearsal ran clean; no gaps observed in the rotation calendar for this lane.
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
@@ -353,6 +355,8 @@ Shift lead logged routine rollout observation for inventory (east) during review
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 > **Rollout draft proposal (2026-02-23 - CAB-1924)** Dana: subtract the full handoff, blackout and degrade overlaps from billable time with no divisor *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
 
+> **Rollout draft proposal (2026-02-24 - CAB-1925)** Tomas: exception and attenuation unit counts should all round the same way — floor-divide every overlap (suppress, boost, handoff, blackout, degrade) by its unit size so the conversions stay consistent *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
+
 ### Review entry 0085 — edge lane
 Shift lead logged routine rollout observation for edge (west) during review window 0085. Synthetic incident injection verified pager delivery for secondary responders in this region.
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
@@ -401,6 +405,12 @@ Thread archived; see the CAB decision log entries for anything affecting compile
 Shift lead logged routine rollout observation for auth (east) during review window 0096. Rotation swap requested and approved; no change to escalation policy parameters.
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 > **Rollout draft proposal (2026-02-25 - CAB-1928)** Tomas: carry responder debt forward without any cap; long weekends should accumulate naturally *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
+
+> **Rollout draft proposal (2026-02-25 - CAB-1926)** Dana: responder-debt bookkeeping between a service's windows — decay carried debt by half the idle gap (`debt_in_ms = max(previous.debt_out_ms - idle_gap_ms//2, 0)`), credit `debt_adjusted_dispatchable_ms` with `debt_in_ms//4`, and on carry-out add `handoff_segment_count*15 + blackout_segment_count*20 + degrade_segment_count*10` with no separate maintenance-span credit *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
+
+> **Rollout draft proposal (2026-02-26 - CAB-1930)** Dana: the pressure probes should look back a flat 200ms — probe [end_ms-200, end_ms) for handoff, blackout and degrade alike — and each pressure score is (all_probe_ms // 40) + (severity_probe_ms // 25) + segment_count, uniform across the three domains *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
+
+> **Rollout draft proposal (2026-02-27 - CAB-1932)** Tomas: escalation_score should weight debt_adjusted_dispatchable_ms // 50, incident_count once, critical_incident_count twice, and count each pressure score a single time rather than doubling any of them *(Superseded — reversed in the 2026-05 change review; see the matching decision entry.)*
 
 ### Review entry 0097 — billing lane
 Shift lead logged routine rollout observation for billing (west) during review window 0097. Quarterly audit sampled acknowledgment records; no compiler-relevant findings for this lane.
