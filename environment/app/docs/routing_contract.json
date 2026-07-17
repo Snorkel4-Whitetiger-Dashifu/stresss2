@@ -252,6 +252,25 @@
       "default_policy_sha256": "fc2261cb7ae597e6b5a69e368da348e9e95947e7369a62a76c27016f46719d46"
     }
   },
+  "summary_field_recovery": {
+    "note": "canonical_incident_count, severity_counts, planned_excluded_count and canonical_input_checksum are computed over ALL canonical deduplicated incidents INCLUDING planned ones. Planned incidents never form service windows, so these four fields cannot be reconstructed from service_windows.json or incident_queue.jsonl and have no other feedback handle. The worked example below isolates them end to end: it exercises duplicate grouping and its tie-break, service-alias folding, severity normalization, and planned coercion (all defined authoritatively in /app/incident/rollout_review_log.md), and pins the exact counts and canonical_input_checksum serialization. raw_incident_count and unique_incident_ids are taken from the raw input before canonicalization and are shown for completeness. policy_checksum is not listed here because the resolved policy fields also drive the queue's scoring and thresholds, so a matching incident_queue already fixes it.",
+    "worked_example": {
+      "input_incidents": [
+        {"incident_id": "d1", "service": "authentication", "start_ms": 100, "end_ms": 200, "severity": "major", "planned": false},
+        {"incident_id": "d1", "service": "auth", "start_ms": 100, "end_ms": 260, "severity": "critical", "planned": true},
+        {"incident_id": "d2", "service": "payments", "start_ms": 300, "end_ms": 500, "severity": "unknown", "planned": 0},
+        {"incident_id": "d3", "service": "search-api", "start_ms": 400, "end_ms": 700, "severity": "minor", "planned": "true"},
+        {"incident_id": "d4", "service": "auth", "start_ms": 800, "end_ms": 900, "severity": "critical", "planned": "false"}
+      ],
+      "raw_incident_count": 5,
+      "unique_incident_ids": 4,
+      "canonical_incident_count": 4,
+      "severity_counts": {"critical": 2, "major": 0, "minor": 2},
+      "planned_excluded_count": 2,
+      "canonical_payload": "d1|auth|100|260|critical|1\nd4|auth|800|900|critical|0\nd2|billing|300|500|minor|0\nd3|search|400|700|minor|1",
+      "canonical_input_checksum": "6b7585fc3353f6e3588f5dd510ffa2dd8ded3fb9a693f5e39fc40c3ee294fe17"
+    }
+  },
   "guardrails": {
     "original_snapshot_path": "/app/workflow/.compile_outages.original",
     "tests_tree_access": "forbidden",
