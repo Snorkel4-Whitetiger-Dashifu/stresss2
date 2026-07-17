@@ -4,7 +4,7 @@ Operational deployment contract for the outage routing compile on responder host
 
 ## Service account
 
-The compile runs as the dedicated system account `svc-outage`. The account has no interactive login shell (`/usr/sbin/nologin`).
+The *scheduled* compile runs under the dedicated system account `svc-outage` — that identity is selected by the cron drop-in below (the user field of the cron line), not by the wrapper. The account has no interactive login shell (`/usr/sbin/nologin`).
 
 ## Wrapper
 
@@ -12,6 +12,7 @@ Operations invokes the compiler only through `/usr/local/bin/compile-outages`:
 
 - mode `0755`, owned by root
 - forwards all arguments to `python3 /app/workflow/compile_outages.py`
+- runs the compiler **as the invoking user**: the wrapper must not switch user, `su`, `sudo`, `setpriv`, `setuid`, or otherwise drop privileges — selecting the `svc-outage` identity is the cron drop-in's job, not the wrapper's. Invoked directly (e.g. by an operator or in a check), the wrapper runs the compiler as whoever ran it.
 - concurrency guard: when the lock file `/var/lock/outage-compile.lock` exists, the wrapper must exit with status `75` (EX_TEMPFAIL) without invoking the compiler or writing any output
 
 Stale locks left behind by crashed runs are removed during recovery, not worked around.
