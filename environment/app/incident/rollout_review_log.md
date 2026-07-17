@@ -2018,6 +2018,7 @@ Historical CSV escalation exports remain archived and non-authoritative for the 
 ### Review entry 0493 — edge lane
 Shift lead logged routine rollout observation for edge (west) during review window 0493. On-call handoff rehearsal ran clean; no gaps observed in the rotation calendar for this lane.
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
+> **Change-review decision (2026-05-18 - CAB-2251)** Marta: the maintenance-window review closed on this lane with one ledger change — a window that overlapped planned maintenance still leaves residual responder debt, and carrying nothing for it understated the next window's position. Each maintenance span now carries a credit alongside the existing ones: `debt_out_ms = min(debt_in_ms + dispatchable_billable_duration_ms + maintenance_span_count*12 + handoff_segment_count*20 + blackout_segment_count*25 + degrade_segment_count*15, 2500)`. The 12-point maintenance credit revises CAB-2219; the 20/25/15 credits, the one-third idle decay and the 2500 cap recorded there are unchanged, as is the extended-idle reset in CAB-2236.
 
 ### Review entry 0494 — notifications lane
 Shift lead logged routine rollout observation for notifications (north) during review window 0494. Vendor paging webhook retried twice before delivery; within contractual retry budget.

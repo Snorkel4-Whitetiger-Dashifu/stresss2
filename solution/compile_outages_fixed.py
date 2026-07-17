@@ -625,6 +625,7 @@ def merge_windows(
             debt_out_ms = min(
                 debt_in_ms
                 + block["dispatchable_billable_duration_ms"]
+                + (block["maintenance_span_count"] * 12)
                 + (block["handoff_segment_count"] * 20)
                 + (block["blackout_segment_count"] * 25)
                 + (block["degrade_segment_count"] * 15),
