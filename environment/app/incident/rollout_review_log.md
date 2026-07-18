@@ -500,14 +500,22 @@ Shift lead logged routine rollout observation for inventory (east) during review
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 
 ### Review entry 0117 — edge lane
+> **Change-review decision (2026-04-20 - CAB-2127)** Dana: duplicate incidents are grouped by `incident_id` and the kept row is chosen by highest severity rank first, then max end_ms, then max start_ms; the planned flag does not enter the tie-break. *(Revised — see the 2026-05 change review.)*
+> **Change-review decision (2026-04-22 - CAB-2131)** Tomas: scoped handoff/blackout/degrade overlap_ms is the SUM of the (service, all) clipped duration and the (service, max_severity) clipped duration, and segment_count is the total count of clips across both scopes; the two scopes are not unioned. *(Revised — see the 2026-05 change review.)*
+> **Change-review decision (2026-04-24 - CAB-2133)** Tomas: where a suppress span and a boost span intersect, the shared duration counts toward suppression_overlap_ms and is excluded from boost_overlap_ms; suppress wins the intersection. *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for edge (west) during review window 0117. Quarterly audit sampled acknowledgment records; no compiler-relevant findings for this lane.
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.
 
 ### Review entry 0118 — notifications lane
+> **Change-review decision (2026-04-26 - CAB-2135)** Dana: pressure divisors — `handoff_pressure_score` = (all_probe_ms // 25) + (severity_probe_ms // 15) + handoff_segment_count; `blackout_pressure_score` uses // 30 and // 20; `degrade_pressure_score` uses // 28 and // 18. *(Revised — see the 2026-05 change review.)*
+> **Change-review decision (2026-04-28 - CAB-2137)** Tomas: `escalation_score` = (debt_adjusted_dispatchable_ms // 60) + incident_count*2 + critical_incident_count*3 + severity_weight[max_severity]; the exception-balance, handoff, blackout and debt pressure terms are not part of it. *(Revised — see the 2026-05 change review.)*
+> **Change-review decision (2026-04-30 - CAB-2139)** Dana: interval semantics are closed [start_ms, end_ms]; endpoint-only contact contributes 1ms of overlap. *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for notifications (north) during review window 0118. Noise review: duplicate page storm traced to a flapping health check, muted at the source.
 No compiler semantics were changed in this entry; parameters remain as approved by the change board.
 
 ### Review entry 0119 — ledger lane
+> **Change-review decision (2026-05-01 - CAB-2141)** Tomas: `planned` coercion treats any non-empty string as true, including `false` and `no`, and treats a numeric planned value of 2 as true. *(Revised — see the 2026-05 change review.)*
+> **Change-review decision (2026-05-01 - CAB-2143)** Dana: `debt_adjusted_dispatchable_ms` = dispatchable_billable_duration_ms + (debt_in_ms // 4). *(Revised — see the 2026-05 change review.)*
 Shift lead logged routine rollout observation for ledger (central) during review window 0119. Capacity review noted rising page volume; no threshold changes approved outside the CAB process.
 Thread archived; see the CAB decision log entries for anything affecting compile behavior.
 
