@@ -1,12 +1,170 @@
 [
-  {"service": "auth", "start_ms": 120, "end_ms": 260, "action": "suppress"},
-  {"service": "authentication", "start_ms": 500, "end_ms": 560, "action": "boost"},
-  {"service": "auth", "start_ms": 555, "end_ms": 600, "action": "boost"},
-  {"service": "payments", "start_ms": 250, "end_ms": 340, "action": "boost"},
-  {"service": "billing", "start_ms": 930, "end_ms": 1080, "action": "suppress"},
-  {"service": "search-api", "start_ms": 640, "end_ms": 740, "action": "boost"},
-  {"service": "search", "start_ms": 700, "end_ms": 780, "action": "suppress"},
-  {"service": "search", "start_ms": "oops", "end_ms": "20", "action": "boost"},
-  {"service": "search", "start_ms": 780, "end_ms": 780, "action": "boost"},
-  {"service": "auth", "start_ms": 50, "end_ms": 90, "action": "ignore"}
+  {
+    "service": "auth",
+    "start_ms": 890,
+    "end_ms": 1140,
+    "action": "suppress"
+  },
+  {
+    "service": "auth",
+    "start_ms": 920,
+    "end_ms": 980,
+    "action": "boost"
+  },
+  {
+    "service": "auth",
+    "start_ms": 2390,
+    "end_ms": 2650,
+    "action": "suppress"
+  },
+  {
+    "service": "auth",
+    "start_ms": 2420,
+    "end_ms": 2480,
+    "action": "boost"
+  },
+  {
+    "service": "billing",
+    "start_ms": 990,
+    "end_ms": 1310,
+    "action": "suppress"
+  },
+  {
+    "service": "billing",
+    "start_ms": 1020,
+    "end_ms": 1080,
+    "action": "boost"
+  },
+  {
+    "service": "search",
+    "start_ms": 190,
+    "end_ms": 575,
+    "action": "suppress"
+  },
+  {
+    "service": "search",
+    "start_ms": 220,
+    "end_ms": 280,
+    "action": "boost"
+  },
+  {
+    "service": "search",
+    "start_ms": 2590,
+    "end_ms": 2840,
+    "action": "suppress"
+  },
+  {
+    "service": "search",
+    "start_ms": 2620,
+    "end_ms": 2680,
+    "action": "boost"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 890,
+    "end_ms": 1160,
+    "action": "suppress"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 920,
+    "end_ms": 980,
+    "action": "boost"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 2690,
+    "end_ms": 3050,
+    "action": "suppress"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 2720,
+    "end_ms": 2780,
+    "action": "boost"
+  },
+  {
+    "service": "cache",
+    "start_ms": 550,
+    "end_ms": 740,
+    "action": "suppress"
+  },
+  {
+    "service": "cache",
+    "start_ms": 580,
+    "end_ms": 640,
+    "action": "boost"
+  },
+  {
+    "service": "cache",
+    "start_ms": 1550,
+    "end_ms": 1800,
+    "action": "suppress"
+  },
+  {
+    "service": "cache",
+    "start_ms": 1580,
+    "end_ms": 1640,
+    "action": "boost"
+  },
+  {
+    "service": "storage",
+    "start_ms": 1810,
+    "end_ms": 2130,
+    "action": "suppress"
+  },
+  {
+    "service": "storage",
+    "start_ms": 1840,
+    "end_ms": 1900,
+    "action": "boost"
+  },
+  {
+    "service": "cdn",
+    "start_ms": 1190,
+    "end_ms": 1540,
+    "action": "suppress"
+  },
+  {
+    "service": "cdn",
+    "start_ms": 1220,
+    "end_ms": 1280,
+    "action": "boost"
+  },
+  {
+    "service": "stream",
+    "start_ms": 890,
+    "end_ms": 1300,
+    "action": "suppress"
+  },
+  {
+    "service": "stream",
+    "start_ms": 920,
+    "end_ms": 980,
+    "action": "boost"
+  },
+  {
+    "service": "ledger",
+    "start_ms": 90,
+    "end_ms": 450,
+    "action": "suppress"
+  },
+  {
+    "service": "ledger",
+    "start_ms": 120,
+    "end_ms": 180,
+    "action": "boost"
+  },
+  {
+    "service": "ledger",
+    "start_ms": 1590,
+    "end_ms": 1830,
+    "action": "suppress"
+  },
+  {
+    "service": "ledger",
+    "start_ms": 1620,
+    "end_ms": 1680,
+    "action": "boost"
+  }
 ]

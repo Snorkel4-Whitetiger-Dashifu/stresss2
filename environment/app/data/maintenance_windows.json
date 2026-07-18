@@ -1,13 +1,77 @@
 [
-  {"service": "auth", "start_ms": 150, "end_ms": 220},
-  {"service": "auth", "start_ms": 700, "end_ms": 780},
-  {"service": "auth", "start_ms": 1200, "end_ms": 1220},
-
-  {"service": "billing", "start_ms": 300, "end_ms": 360},
-  {"service": "billing", "start_ms": 910, "end_ms": 950},
-
-  {"service": "search", "start_ms": 50, "end_ms": 120},
-  {"service": "search", "start_ms": 390, "end_ms": 450},
-  {"service": "search", "start_ms": 700, "end_ms": 760},
-  {"service": "search", "start_ms": 1000, "end_ms": 1100}
+  {
+    "service": "auth",
+    "start_ms": 910,
+    "end_ms": 970
+  },
+  {
+    "service": "auth",
+    "start_ms": 2410,
+    "end_ms": 2450
+  },
+  {
+    "service": "billing",
+    "start_ms": 1010,
+    "end_ms": 1090
+  },
+  {
+    "service": "search",
+    "start_ms": 210,
+    "end_ms": 270
+  },
+  {
+    "service": "search",
+    "start_ms": 2610,
+    "end_ms": 2650
+  },
+  {
+    "service": "gateway",
+    "start_ms": 910,
+    "end_ms": 990
+  },
+  {
+    "service": "gateway",
+    "start_ms": 2710,
+    "end_ms": 2770
+  },
+  {
+    "service": "cache",
+    "start_ms": 570,
+    "end_ms": 610
+  },
+  {
+    "service": "cache",
+    "start_ms": 1570,
+    "end_ms": 1650
+  },
+  {
+    "service": "storage",
+    "start_ms": 1830,
+    "end_ms": 1890
+  },
+  {
+    "service": "cdn",
+    "start_ms": 1210,
+    "end_ms": 1250
+  },
+  {
+    "service": "stream",
+    "start_ms": 910,
+    "end_ms": 990
+  },
+  {
+    "service": "ledger",
+    "start_ms": 110,
+    "end_ms": 170
+  },
+  {
+    "service": "ledger",
+    "start_ms": 1610,
+    "end_ms": 1650
+  },
+  {
+    "service": "auth",
+    "start_ms": 3230,
+    "end_ms": 3310
+  }
 ]

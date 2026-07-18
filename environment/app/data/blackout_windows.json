@@ -1,12 +1,62 @@
 [
-  {"service": "auth", "severity_scope": "all", "start_ms": 280, "end_ms": 390},
-  {"service": "authentication", "severity_scope": "critical", "start_ms": 560, "end_ms": 660},
-  {"service": "auth", "severity_scope": "critical", "start_ms": 655, "end_ms": 710},
-  {"service": "payments", "severity_scope": "all", "start_ms": 910, "end_ms": 1000},
-  {"service": "billing", "severity_scope": "major", "start_ms": 1020, "end_ms": 1140},
-  {"service": "search-api", "severity_scope": "all", "start_ms": 620, "end_ms": 680},
-  {"service": "search", "severity_scope": "critical", "start_ms": 880, "end_ms": 1030},
-  {"service": "search", "severity_scope": "major", "start_ms": 1320, "end_ms": 1390},
-  {"service": "search", "severity_scope": "debug", "start_ms": 0, "end_ms": 1},
-  {"service": "auth", "severity_scope": "all", "start_ms": "oops", "end_ms": "oops2"}
+  {
+    "service": "auth",
+    "severity_scope": "all",
+    "start_ms": 2566,
+    "end_ms": 2716
+  },
+  {
+    "service": "billing",
+    "severity_scope": "critical",
+    "start_ms": 383,
+    "end_ms": 503
+  },
+  {
+    "service": "search",
+    "severity_scope": "all",
+    "start_ms": 2760,
+    "end_ms": 2910
+  },
+  {
+    "service": "gateway",
+    "severity_scope": "all",
+    "start_ms": 306,
+    "end_ms": 426
+  },
+  {
+    "service": "cache",
+    "severity_scope": "all",
+    "start_ms": 680,
+    "end_ms": 830
+  },
+  {
+    "service": "cache",
+    "severity_scope": "all",
+    "start_ms": 1160,
+    "end_ms": 1280
+  },
+  {
+    "service": "cdn",
+    "severity_scope": "critical",
+    "start_ms": 1426,
+    "end_ms": 1576
+  },
+  {
+    "service": "stream",
+    "severity_scope": "all",
+    "start_ms": 326,
+    "end_ms": 446
+  },
+  {
+    "service": "ledger",
+    "severity_scope": "all",
+    "start_ms": 1753,
+    "end_ms": 1903
+  },
+  {
+    "service": "billing",
+    "severity_scope": "critical",
+    "start_ms": 3260,
+    "end_ms": 3420
+  }
 ]
