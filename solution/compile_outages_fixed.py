@@ -43,7 +43,7 @@ DEFAULT_POLICY = {
     "boost_high_relief_ms": 40,
     "handoff_penalty_ms": 35,
     "handoff_unit_ms": 60,
-    "handoff_force_critical_ms": 150,
+    "handoff_force_critical_ms": 59,
     "handoff_high_relief_ms": 50,
     "blackout_penalty_ms": 45,
     "blackout_unit_ms": 70,
@@ -254,7 +254,8 @@ def canonicalize(rows: list[dict]) -> list[dict]:
         elif normalized["end_ms"] == current["end_ms"]:
             next_rank = SEVERITY_RANK[normalized["severity"]]
             current_rank = SEVERITY_RANK[current["severity"]]
-            if next_rank > current_rank:
+            # CAB-2258 reverses this: the LOWER-ranked severity wins a duplicate tie.
+            if next_rank < current_rank:
                 replace = True
             elif next_rank == current_rank:
                 if current["planned"] and not normalized["planned"]:

@@ -894,8 +894,11 @@ def test_dedupe_tie_break_chain_exercised():
             windows = _load_json(out / "service_windows.json")
             assert list(windows.keys()) == ["billing"]
             block = windows["billing"][0]
-            assert block["start_ms"] == 130
-            assert block["max_severity"] == "critical"
+            # CAB-2258 reverses the severity step: the LOWER rank wins the tie, so the
+            # two `major` rows survive the critical ones, and `planned == false` then
+            # picks billing/120 over payments/100.
+            assert block["start_ms"] == 120
+            assert block["max_severity"] == "major"
             assert block["source_incident_ids"] == ["d1"]
     finally:
         MAINTENANCE_PATH.write_text(original)

@@ -21,7 +21,8 @@
       "minor": 1
     },
     "score_threshold_critical": 38,
-    "score_threshold_high": 24
+    "score_threshold_high": 24,
+    "handoff_force_critical_ms": 59
   },
   "service_overrides": {
     "auth": {
