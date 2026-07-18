@@ -309,12 +309,14 @@ def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
             assert block["billable_duration_ms"] == max(
                 block["duration_ms"] - block["maintenance_overlap_ms"], 0
             )
+            # Handoff attenuation rounds UP per CAB-2252.
             assert block["adjusted_billable_duration_ms"] == max(
-                block["billable_duration_ms"] - (block["handoff_overlap_ms"] // 2),
+                block["billable_duration_ms"] - (-(-block["handoff_overlap_ms"] // 2)),
                 0,
             )
+            # Blackout attenuation rounds UP per CAB-2254; degrade below stays floored.
             assert block["routed_billable_duration_ms"] == max(
-                block["adjusted_billable_duration_ms"] - (block["blackout_overlap_ms"] // 3),
+                block["adjusted_billable_duration_ms"] - (-(-block["blackout_overlap_ms"] // 3)),
                 0,
             )
             assert block["dispatchable_billable_duration_ms"] == max(
@@ -1077,7 +1079,8 @@ def test_blackout_compaction_and_scope_exercised():
             second = windows["search"][1]
             assert first["blackout_overlap_ms"] == 190
             assert first["blackout_segment_count"] == 2
-            assert first["routed_billable_duration_ms"] == 237
+            # adjusted - ceil(190/3) = adjusted - 64 per CAB-2254 (floor gave 237)
+            assert first["routed_billable_duration_ms"] == 236
             assert second["blackout_overlap_ms"] == 0
             assert summary["total_blackout_overlap_ms"] == 190
             assert summary["total_blackout_segment_count"] == 2

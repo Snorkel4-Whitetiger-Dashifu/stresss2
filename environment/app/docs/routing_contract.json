@@ -335,5 +335,73 @@
       "queue rows, their thresholds and every checksum derived from the above"
     ],
     "consequence": "Two raw labels that fold to the same canonical label are the same service for compaction and overlap purposes: their policy spans compact together as one domain, and the overlap is computed once against the merged spans. Compacting the raw labels separately and only folding afterwards produces different overlap milliseconds and therefore different durations, queue membership and checksums."
+  },
+  "governing_entry_index": {
+    "_note": "Navigation aid only. It records WHICH review entries carry the governing rule for each pipeline stage; it does not restate any rule, value, divisor, threshold or rounding direction. Read the named entries in /app/incident/rollout_review_log.md for the rules themselves, and note that entries not listed here are either superseded by a later dated entry or carry no estimator semantics.",
+    "stages": {
+      "canonicalization": [
+        "CAB-2201",
+        "CAB-2202",
+        "CAB-2204",
+        "CAB-2205",
+        "CAB-2207"
+      ],
+      "interval_semantics": [
+        "CAB-2208"
+      ],
+      "window_construction": [
+        "CAB-2210",
+        "CAB-2251"
+      ],
+      "routing_domain_order": [
+        "CAB-2211"
+      ],
+      "scoped_overlap": [
+        "CAB-2213"
+      ],
+      "suppress_boost_precedence": [
+        "CAB-2214"
+      ],
+      "attenuation_chain": [
+        "CAB-2216",
+        "CAB-2217",
+        "CAB-2252",
+        "CAB-2254"
+      ],
+      "exception_units": [
+        "CAB-2224",
+        "CAB-2256"
+      ],
+      "debt_ledger": [
+        "CAB-2219",
+        "CAB-2236",
+        "CAB-2242"
+      ],
+      "policy_resolution": [
+        "CAB-2221",
+        "CAB-2222"
+      ],
+      "queue_admission": [
+        "CAB-2225"
+      ],
+      "pressure_scores": [
+        "CAB-2227",
+        "CAB-2228",
+        "CAB-2246",
+        "CAB-2248"
+      ],
+      "priority_assignment": [
+        "CAB-2230",
+        "CAB-2231"
+      ],
+      "queue_ordering": [
+        "CAB-2233"
+      ],
+      "rounding_map": [
+        "CAB-2250"
+      ]
+    },
+    "rounding_warning": "Rounding direction is not uniform across the pipeline and is not inferable from any neighbouring divisor, including between siblings in the same family. Each divisor's direction is fixed by its own entry above; CAB-2250 records the map.",
+    "non_normative_entries": "CAB-2240, CAB-2243, CAB-2249 and CAB-2262 concern dashboards, archive ingest, publication and access recertification. They carry no estimator semantics."
   }
 }

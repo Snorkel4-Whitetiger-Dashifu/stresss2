@@ -1,6 +1,6 @@
 {
   "default": {
-    "queue_min_effective_ms": 220,
+    "queue_min_effective_ms": 234,
     "critical_p1_min_ms": 280,
     "critical_threshold_ms": 650,
     "high_threshold_ms": 320,
@@ -20,8 +20,8 @@
       "major": 3,
       "minor": 1
     },
-    "score_threshold_critical": 34,
-    "score_threshold_high": 18
+    "score_threshold_critical": 38,
+    "score_threshold_high": 24
   },
   "service_overrides": {
     "auth": {

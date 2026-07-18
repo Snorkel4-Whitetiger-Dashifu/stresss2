@@ -552,7 +552,8 @@ def merge_windows(
             )
             block["handoff_segment_count"] = len(compacted_handoff_spans)
             block["adjusted_billable_duration_ms"] = max(
-                block["billable_duration_ms"] - (block["handoff_overlap_ms"] // 2),
+                # Handoff overlap subtracted ROUNDED UP per CAB-2252. ceil(x/2)=-(-x//2).
+                block["billable_duration_ms"] - (-(-block["handoff_overlap_ms"] // 2)),
                 0,
             )
             blackout_spans = _window_overlap_spans(
@@ -573,7 +574,8 @@ def merge_windows(
             )
             block["blackout_segment_count"] = len(compacted_blackout_spans)
             block["routed_billable_duration_ms"] = max(
-                block["adjusted_billable_duration_ms"] - (block["blackout_overlap_ms"] // 3),
+                # Blackout overlap subtracted ROUNDED UP per CAB-2254. ceil(x/3)=-(-x//3).
+                block["adjusted_billable_duration_ms"] - (-(-block["blackout_overlap_ms"] // 3)),
                 0,
             )
             degrade_spans = _window_overlap_spans(
@@ -665,7 +667,8 @@ def build_queue(
                 if block["suppression_overlap_ms"] > 0
                 else 0
             )
-            boost_units = block["boost_overlap_ms"] // boost_unit
+            # Boost units counted ROUNDED UP per CAB-2256, like the suppression unit.
+            boost_units = -(-block["boost_overlap_ms"] // boost_unit)
             effective_queue_min_ms = max(
                 policy["queue_min_effective_ms"]
                 + suppress_units * policy["suppress_penalty_ms"]

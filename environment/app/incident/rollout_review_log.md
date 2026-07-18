@@ -533,8 +533,17 @@ Historical CSV escalation exports remain archived and non-authoritative for the 
 ### Review entry 0818 — debt bench
 > **Change-review decision (2026-05-17 - CAB-2248)** Ilya: the debt-in half of the debt pressure score ROUNDS UP while the debt-out half does not: `debt_pressure_score = (debt_out_ms // 80) + ceil(debt_in_ms / 120)`. The 80 debt-out divisor is unchanged.
 
+### Review entry 0822 — routing bench
+> **Change-review decision (2026-05-19 - CAB-2252)** Dana: handoff attenuation review found a scoped handoff overlap shorter than one full step was being absorbed without cost, so the handoff subtraction ROUNDS UP: `adjusted_billable_duration_ms = max(billable_duration_ms - ceil(handoff_overlap_ms / 2), 0)`. In integer arithmetic ceil(x/2) is -(-x // 2). This revises the floored form recorded in CAB-2208.
+
+### Review entry 0824 — routing bench
+> **Change-review decision (2026-05-19 - CAB-2254)** Dana: the blackout attenuation takes the same correction: `routed_billable_duration_ms = max(adjusted_billable_duration_ms - ceil(blackout_overlap_ms / 3), 0)`. The degrade attenuation that follows it was reviewed in the same session and is deliberately left FLOORED at `degrade_overlap_ms // 4`, so the three attenuation layers must not be assumed to round alike.
+
+### Review entry 0826 — exception bench
+> **Change-review decision (2026-05-20 - CAB-2256)** Ilya: boost units are counted the same way suppression units already are — `boost_units = ceil(boost_overlap_ms / boost_unit_ms)` — because a partial boost window was previously granting no credit at all. The handoff, blackout and degrade unit counts keep their floors and are not affected by this entry.
+
 ### Review entry 0820 — audit bench
-> **Change-review decision (2026-05-18 - CAB-2250)** Ilya: recording the rounding map settled across CAB-2224, CAB-2242, CAB-2246 and CAB-2248 for the avoidance of doubt. Rounding in this compiler is NOT uniform and no divisor's direction may be inferred from any other, including between siblings in the same family: the suppression unit count and the four probe/unit families each carry their own direction, and the degrade and handoff probes stay floored where the blackout probe rounds up. Read each divisor's direction from its own governing decision.
+> **Change-review decision (2026-05-18 - CAB-2250)** Ilya: recording the rounding map settled across CAB-2224, CAB-2242, CAB-2246, CAB-2248, CAB-2252, CAB-2254 and CAB-2256 for the avoidance of doubt. Rounding in this compiler is NOT uniform and no divisor's direction may be inferred from any other, including between siblings in the same family: the suppression unit count and the four probe/unit families each carry their own direction, and the degrade and handoff probes stay floored where the blackout probe rounds up. Read each divisor's direction from its own governing decision.
 
 ### Review entry 0121 — billing lane
 Shift lead logged routine rollout observation for billing (west) during review window 0121. Dashboard tiles for responder load lagged during the sync window; attributed to cache refresh, not the compiler.
@@ -2207,7 +2216,7 @@ Reviewers should reconcile behavior questions against the CAB decision entries r
 The quarterly tabletop walked the outage-to-responder path end to end with the compiler treated as a black box: a synthetic outage burst was injected into a staging replica and each lane's on-call narrated their actions from the artifacts alone. Facilitators stopped the clock four times. The first stop tested whether responders could distinguish a suppressed window from a queued one using only the queue artifact and the runbook; every lane answered correctly, though two took over five minutes, and the board asked for a one-page reading guide rather than any change to the artifacts. The second stop simulated a stale dashboard during an active page; the on-call correctly fell back to the queue file on disk, noted as intended behavior since the dashboard is a projection, never the record. The third stop was a deliberately misrouted escalation where the paged lane did not own the affected service; the handoff completed in under two minutes using the escalation tree verified in prep. The final stop rehearsed evidence preservation: responders exported the queue and summary artifacts, recorded their signatures in the incident channel, and confirmed the frozen snapshot remained untouched. Action items: publish the reading guide, add the signature-recording step to the runbook appendix, and repeat with the secondary pool as primary. The board minuted explicitly that no action item touches compile behavior; all semantics remain exactly as ticketed.
 
 
-> **Change-review decision (2026-06-03 - CAB-2246)** Dana: quarterly access recertification for the routing path samples service-to-service grants at twice the standard rate through year end. Access policy; no compiler impact.
+> **Change-review decision (2026-06-03 - CAB-2262)** Dana: quarterly access recertification for the routing path samples service-to-service grants at twice the standard rate through year end. Access policy; no compiler impact.
 
 
 ### Review entry 0529 — checkout lane
