@@ -1,8 +1,14 @@
 [
   {
     "service": "auth",
-    "start_ms": 489,
-    "end_ms": 640,
+    "start_ms": 91,
+    "end_ms": 147,
+    "action": "suppress"
+  },
+  {
+    "service": "auth",
+    "start_ms": 491,
+    "end_ms": 563,
     "action": "suppress"
   },
   {
@@ -13,8 +19,14 @@
   },
   {
     "service": "auth",
-    "start_ms": 1289,
-    "end_ms": 1610,
+    "start_ms": 891,
+    "end_ms": 986,
+    "action": "suppress"
+  },
+  {
+    "service": "auth",
+    "start_ms": 1291,
+    "end_ms": 1409,
     "action": "suppress"
   },
   {
@@ -24,9 +36,15 @@
     "action": "boost"
   },
   {
+    "service": "auth",
+    "start_ms": 2091,
+    "end_ms": 2171,
+    "action": "suppress"
+  },
+  {
     "service": "billing",
-    "start_ms": 139,
-    "end_ms": 279,
+    "start_ms": 141,
+    "end_ms": 244,
     "action": "suppress"
   },
   {
@@ -37,8 +55,14 @@
   },
   {
     "service": "billing",
-    "start_ms": 959,
-    "end_ms": 1089,
+    "start_ms": 511,
+    "end_ms": 648,
+    "action": "suppress"
+  },
+  {
+    "service": "billing",
+    "start_ms": 961,
+    "end_ms": 1033,
     "action": "suppress"
   },
   {
@@ -48,9 +72,15 @@
     "action": "boost"
   },
   {
+    "service": "billing",
+    "start_ms": 1491,
+    "end_ms": 1586,
+    "action": "suppress"
+  },
+  {
     "service": "search",
-    "start_ms": 189,
-    "end_ms": 454,
+    "start_ms": 191,
+    "end_ms": 271,
     "action": "suppress"
   },
   {
@@ -61,8 +91,14 @@
   },
   {
     "service": "search",
-    "start_ms": 1389,
-    "end_ms": 1514,
+    "start_ms": 891,
+    "end_ms": 994,
+    "action": "suppress"
+  },
+  {
+    "service": "search",
+    "start_ms": 1391,
+    "end_ms": 1528,
     "action": "suppress"
   },
   {
@@ -73,8 +109,14 @@
   },
   {
     "service": "gateway",
-    "start_ms": 589,
-    "end_ms": 726,
+    "start_ms": 111,
+    "end_ms": 167,
+    "action": "suppress"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 591,
+    "end_ms": 663,
     "action": "suppress"
   },
   {
@@ -85,8 +127,14 @@
   },
   {
     "service": "gateway",
-    "start_ms": 1439,
-    "end_ms": 1580,
+    "start_ms": 991,
+    "end_ms": 1086,
+    "action": "suppress"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 1441,
+    "end_ms": 1559,
     "action": "suppress"
   },
   {
@@ -97,8 +145,14 @@
   },
   {
     "service": "cache",
-    "start_ms": 439,
-    "end_ms": 568,
+    "start_ms": 91,
+    "end_ms": 171,
+    "action": "suppress"
+  },
+  {
+    "service": "cache",
+    "start_ms": 441,
+    "end_ms": 544,
     "action": "suppress"
   },
   {
@@ -109,8 +163,14 @@
   },
   {
     "service": "cache",
-    "start_ms": 1139,
-    "end_ms": 1284,
+    "start_ms": 791,
+    "end_ms": 928,
+    "action": "suppress"
+  },
+  {
+    "service": "cache",
+    "start_ms": 1141,
+    "end_ms": 1197,
     "action": "suppress"
   },
   {
@@ -121,8 +181,14 @@
   },
   {
     "service": "storage",
-    "start_ms": 909,
-    "end_ms": 1042,
+    "start_ms": 191,
+    "end_ms": 263,
+    "action": "suppress"
+  },
+  {
+    "service": "storage",
+    "start_ms": 911,
+    "end_ms": 1029,
     "action": "suppress"
   },
   {
@@ -133,8 +199,14 @@
   },
   {
     "service": "cdn",
-    "start_ms": 689,
-    "end_ms": 838,
+    "start_ms": 131,
+    "end_ms": 211,
+    "action": "suppress"
+  },
+  {
+    "service": "cdn",
+    "start_ms": 691,
+    "end_ms": 794,
     "action": "suppress"
   },
   {
@@ -145,8 +217,14 @@
   },
   {
     "service": "stream",
-    "start_ms": 629,
-    "end_ms": 769,
+    "start_ms": 151,
+    "end_ms": 288,
+    "action": "suppress"
+  },
+  {
+    "service": "stream",
+    "start_ms": 631,
+    "end_ms": 687,
     "action": "suppress"
   },
   {
@@ -154,5 +232,11 @@
     "start_ms": 653,
     "end_ms": 714,
     "action": "boost"
+  },
+  {
+    "service": "stream",
+    "start_ms": 1091,
+    "end_ms": 1163,
+    "action": "suppress"
   }
 ]
