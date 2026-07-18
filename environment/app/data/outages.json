@@ -3,352 +3,272 @@
     "incident_id": "au1001",
     "service": "Auth",
     "start_ms": 100,
-    "end_ms": 620,
-    "severity": "major",
+    "end_ms": 363,
+    "severity": "critical",
     "planned": false
   },
   {
     "incident_id": "au1002",
     "service": "auth",
-    "start_ms": 640,
-    "end_ms": 800,
-    "severity": "critical",
+    "start_ms": 500,
+    "end_ms": 781,
+    "severity": "major",
     "planned": false
   },
   {
     "incident_id": "au1003",
     "service": "Auth ",
     "start_ms": 900,
-    "end_ms": 1380,
-    "severity": "minor",
-    "planned": "no"
+    "end_ms": 1147,
+    "severity": "critical",
+    "planned": false
   },
   {
     "incident_id": "au1004",
     "service": "AUTHENTICATION",
-    "start_ms": 1500,
-    "end_ms": 2140,
+    "start_ms": 1300,
+    "end_ms": 1920,
     "severity": "critical",
     "planned": false
   },
   {
     "incident_id": "au1005",
     "service": "Auth",
-    "start_ms": 2160,
-    "end_ms": 2280,
-    "severity": "SEV1",
-    "planned": false
-  },
-  {
-    "incident_id": "au1006",
-    "service": "auth",
-    "start_ms": 2400,
-    "end_ms": 2900,
+    "start_ms": 2100,
+    "end_ms": 2333,
     "severity": "major",
     "planned": "0"
   },
   {
-    "incident_id": "bi1007",
+    "incident_id": "bi1006",
     "service": "Payments",
     "start_ms": 150,
-    "end_ms": 850,
+    "end_ms": 408,
     "severity": "critical",
+    "planned": false
+  },
+  {
+    "incident_id": "bi1007",
+    "service": "billing",
+    "start_ms": 520,
+    "end_ms": 791,
+    "severity": "major",
     "planned": false
   },
   {
     "incident_id": "bi1008",
-    "service": "billing",
-    "start_ms": 1000,
-    "end_ms": 1420,
-    "severity": "major",
-    "planned": false
-  },
-  {
-    "incident_id": "bi1009",
     "service": "PAYMENTS ",
-    "start_ms": 1440,
-    "end_ms": 1620,
-    "severity": "minor",
-    "planned": false
-  },
-  {
-    "incident_id": "bi1010",
-    "service": "Billing",
-    "start_ms": 1900,
-    "end_ms": 2460,
+    "start_ms": 950,
+    "end_ms": 1510,
     "severity": "critical",
     "planned": "yes"
   },
   {
-    "incident_id": "bi1011",
-    "service": "Payments",
-    "start_ms": 1920,
-    "end_ms": 2520,
+    "incident_id": "bi1009",
+    "service": "Billing",
+    "start_ms": 970,
+    "end_ms": 1209,
     "severity": "critical",
     "planned": false
   },
   {
-    "incident_id": "se1012",
-    "service": "Search-API",
-    "start_ms": 200,
-    "end_ms": 630,
-    "severity": "minor",
-    "planned": false
-  },
-  {
-    "incident_id": "se1013",
-    "service": "search",
-    "start_ms": 650,
-    "end_ms": 950,
+    "incident_id": "bi1010",
+    "service": "Payments",
+    "start_ms": 1500,
+    "end_ms": 1755,
     "severity": "major",
     "planned": false
   },
   {
-    "incident_id": "se1014",
+    "incident_id": "se1011",
+    "service": "Search-API",
+    "start_ms": 200,
+    "end_ms": 449,
+    "severity": "minor",
+    "planned": false
+  },
+  {
+    "incident_id": "se1012",
+    "service": "search",
+    "start_ms": 466,
+    "end_ms": 709,
+    "severity": "major",
+    "planned": false
+  },
+  {
+    "incident_id": "se1013",
     "service": "Search ",
-    "start_ms": 1200,
-    "end_ms": 1850,
+    "start_ms": 900,
+    "end_ms": 1166,
     "severity": "critical",
     "planned": false
   },
   {
-    "incident_id": "se1015",
+    "incident_id": "se1014",
     "service": "search-api ",
-    "start_ms": 2600,
-    "end_ms": 3080,
+    "start_ms": 1400,
+    "end_ms": 1629,
+    "severity": "major",
+    "planned": false
+  },
+  {
+    "incident_id": "ga1015",
+    "service": "gateway",
+    "start_ms": 120,
+    "end_ms": 394,
     "severity": "major",
     "planned": false
   },
   {
     "incident_id": "ga1016",
-    "service": "gateway",
-    "start_ms": 120,
-    "end_ms": 680,
-    "severity": "major",
+    "service": "Gateway",
+    "start_ms": 600,
+    "end_ms": 852,
+    "severity": "critical",
     "planned": false
   },
   {
     "incident_id": "ga1017",
-    "service": "Gateway",
-    "start_ms": 900,
-    "end_ms": 1420,
-    "severity": "critical",
-    "planned": false
-  },
-  {
-    "incident_id": "ga1018",
     "service": "GATEWAY ",
-    "start_ms": 1600,
-    "end_ms": 2040,
+    "start_ms": 1000,
+    "end_ms": 1238,
     "severity": "minor",
     "planned": false
   },
   {
-    "incident_id": "ga1019",
+    "incident_id": "ga1018",
     "service": "gateway",
-    "start_ms": 2700,
-    "end_ms": 3400,
+    "start_ms": 1450,
+    "end_ms": 1711,
     "severity": "critical",
     "planned": false
   },
   {
-    "incident_id": "ca1020",
+    "incident_id": "ca1019",
     "service": "cache",
     "start_ms": 100,
-    "end_ms": 460,
+    "end_ms": 341,
+    "severity": "minor",
+    "planned": false
+  },
+  {
+    "incident_id": "ca1020",
+    "service": "Cache ",
+    "start_ms": 450,
+    "end_ms": 686,
     "severity": "minor",
     "planned": false
   },
   {
     "incident_id": "ca1021",
-    "service": "Cache ",
-    "start_ms": 560,
-    "end_ms": 920,
-    "severity": "minor",
-    "planned": false
-  },
-  {
-    "incident_id": "ca1022",
     "service": "cache",
-    "start_ms": 1020,
-    "end_ms": 1440,
+    "start_ms": 800,
+    "end_ms": 1053,
     "severity": "major",
     "planned": false
   },
   {
-    "incident_id": "ca1023",
+    "incident_id": "ca1022",
     "service": "Cache ",
-    "start_ms": 1560,
-    "end_ms": 2040,
+    "start_ms": 1150,
+    "end_ms": 1418,
+    "severity": "critical",
+    "planned": false
+  },
+  {
+    "incident_id": "st1023",
+    "service": "storage",
+    "start_ms": 200,
+    "end_ms": 457,
     "severity": "critical",
     "planned": false
   },
   {
     "incident_id": "st1024",
-    "service": "storage",
-    "start_ms": 200,
-    "end_ms": 960,
-    "severity": "critical",
-    "planned": false
-  },
-  {
-    "incident_id": "st1025",
     "service": "Storage",
-    "start_ms": 980,
-    "end_ms": 1180,
-    "severity": "major",
-    "planned": false
-  },
-  {
-    "incident_id": "st1026",
-    "service": "STORAGE ",
-    "start_ms": 1800,
-    "end_ms": 2300,
+    "start_ms": 900,
+    "end_ms": 1400,
     "severity": "major",
     "planned": "true"
   },
   {
-    "incident_id": "st1027",
+    "incident_id": "st1025",
     "service": "storage",
-    "start_ms": 1820,
-    "end_ms": 2440,
+    "start_ms": 920,
+    "end_ms": 1164,
     "severity": "critical",
     "planned": false
   },
   {
-    "incident_id": "cd1028",
+    "incident_id": "cd1026",
     "service": "cdn",
     "start_ms": 140,
-    "end_ms": 740,
+    "end_ms": 371,
     "severity": "major",
     "planned": false
   },
   {
-    "incident_id": "cd1029",
+    "incident_id": "cd1027",
     "service": "CDN ",
-    "start_ms": 1200,
-    "end_ms": 1880,
+    "start_ms": 700,
+    "end_ms": 976,
+    "severity": "critical",
+    "planned": false
+  },
+  {
+    "incident_id": "st1028",
+    "service": "stream",
+    "start_ms": 160,
+    "end_ms": 408,
+    "severity": "sev0",
+    "planned": false
+  },
+  {
+    "incident_id": "st1029",
+    "service": "Stream ",
+    "start_ms": 640,
+    "end_ms": 899,
     "severity": "critical",
     "planned": false
   },
   {
     "incident_id": "st1030",
     "service": "stream",
-    "start_ms": 160,
-    "end_ms": 660,
-    "severity": "sev0",
-    "planned": false
-  },
-  {
-    "incident_id": "st1031",
-    "service": "Stream ",
-    "start_ms": 900,
-    "end_ms": 1460,
-    "severity": "critical",
-    "planned": false
-  },
-  {
-    "incident_id": "st1032",
-    "service": "stream",
-    "start_ms": 1480,
-    "end_ms": 1700,
+    "start_ms": 1100,
+    "end_ms": 1334,
     "severity": "major",
-    "planned": false
-  },
-  {
-    "incident_id": "st1033",
-    "service": "Stream ",
-    "start_ms": 1900,
-    "end_ms": 2420,
-    "severity": "major",
-    "planned": false
-  },
-  {
-    "incident_id": "le1034",
-    "service": "ledger",
-    "start_ms": 100,
-    "end_ms": 800,
-    "severity": "critical",
-    "planned": false
-  },
-  {
-    "incident_id": "le1035",
-    "service": "Ledger ",
-    "start_ms": 950,
-    "end_ms": 1450,
-    "severity": "major",
-    "planned": false
-  },
-  {
-    "incident_id": "le1036",
-    "service": "ledger",
-    "start_ms": 1600,
-    "end_ms": 2060,
-    "severity": "minor",
     "planned": false
   },
   {
     "incident_id": "DUP1",
     "service": "auth",
-    "start_ms": 3200,
-    "end_ms": 3700,
+    "start_ms": 2600,
+    "end_ms": 2861,
     "severity": "minor",
     "planned": false
   },
   {
     "incident_id": "DUP1",
     "service": "Auth",
-    "start_ms": 3200,
-    "end_ms": 3800,
+    "start_ms": 2600,
+    "end_ms": 2879,
     "severity": "minor",
     "planned": false
   },
   {
     "incident_id": "DUP2",
     "service": "billing",
-    "start_ms": 3200,
-    "end_ms": 3750,
+    "start_ms": 2600,
+    "end_ms": 2853,
     "severity": "major",
     "planned": false
   },
   {
     "incident_id": "DUP2",
     "service": "billing",
-    "start_ms": 3200,
-    "end_ms": 3750,
+    "start_ms": 2600,
+    "end_ms": 2853,
     "severity": "critical",
-    "planned": false
-  },
-  {
-    "incident_id": "DUP3",
-    "service": "gateway",
-    "start_ms": 3600,
-    "end_ms": 4100,
-    "severity": "major",
-    "planned": "yes"
-  },
-  {
-    "incident_id": "DUP3",
-    "service": "gateway",
-    "start_ms": 3600,
-    "end_ms": 4100,
-    "severity": "major",
-    "planned": false
-  },
-  {
-    "incident_id": "DUP4",
-    "service": "cache",
-    "start_ms": 3300,
-    "end_ms": 3800,
-    "severity": "minor",
-    "planned": false
-  },
-  {
-    "incident_id": "DUP4",
-    "service": "cache",
-    "start_ms": 3350,
-    "end_ms": 3800,
-    "severity": "minor",
     "planned": false
   }
 ]

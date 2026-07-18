@@ -2,85 +2,79 @@
   {
     "service": "auth",
     "severity_scope": "all",
-    "start_ms": 2160,
-    "end_ms": 2285
+    "start_ms": 1064,
+    "end_ms": 1150
+  },
+  {
+    "service": "auth",
+    "severity_scope": "all",
+    "start_ms": 2272,
+    "end_ms": 2336
   },
   {
     "service": "billing",
     "severity_scope": "all",
-    "start_ms": 760,
-    "end_ms": 855
+    "start_ms": 349,
+    "end_ms": 411
   },
   {
     "service": "billing",
     "severity_scope": "all",
-    "start_ms": 1560,
-    "end_ms": 1625
+    "start_ms": 1672,
+    "end_ms": 1758
   },
   {
     "service": "search",
     "severity_scope": "all",
-    "start_ms": 1730,
-    "end_ms": 1855
+    "start_ms": 1105,
+    "end_ms": 1169
+  },
+  {
+    "service": "search",
+    "severity_scope": "all",
+    "start_ms": 1570,
+    "end_ms": 1632
   },
   {
     "service": "gateway",
     "severity_scope": "all",
-    "start_ms": 590,
-    "end_ms": 685
-  },
-  {
-    "service": "gateway",
-    "severity_scope": "all",
-    "start_ms": 1360,
-    "end_ms": 1425
+    "start_ms": 1155,
+    "end_ms": 1241
   },
   {
     "service": "cache",
     "severity_scope": "all",
-    "start_ms": 340,
-    "end_ms": 465
+    "start_ms": 280,
+    "end_ms": 344
   },
   {
     "service": "cache",
     "severity_scope": "all",
-    "start_ms": 1350,
-    "end_ms": 1445
+    "start_ms": 627,
+    "end_ms": 689
   },
   {
-    "service": "cache",
+    "service": "storage",
     "severity_scope": "all",
-    "start_ms": 1980,
-    "end_ms": 2045
+    "start_ms": 374,
+    "end_ms": 460
   },
   {
     "service": "cdn",
     "severity_scope": "all",
-    "start_ms": 620,
-    "end_ms": 745
+    "start_ms": 310,
+    "end_ms": 374
+  },
+  {
+    "service": "cdn",
+    "severity_scope": "all",
+    "start_ms": 917,
+    "end_ms": 979
   },
   {
     "service": "stream",
     "severity_scope": "all",
-    "start_ms": 570,
-    "end_ms": 665
-  },
-  {
-    "service": "stream",
-    "severity_scope": "all",
-    "start_ms": 1640,
-    "end_ms": 1705
-  },
-  {
-    "service": "ledger",
-    "severity_scope": "all",
-    "start_ms": 1330,
-    "end_ms": 1455
-  },
-  {
-    "service": "gateway",
-    "severity_scope": "major",
-    "start_ms": 3980,
-    "end_ms": 4120
+    "start_ms": 1251,
+    "end_ms": 1337
   }
 ]

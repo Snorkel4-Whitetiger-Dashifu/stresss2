@@ -1,170 +1,158 @@
 [
   {
     "service": "auth",
-    "start_ms": 890,
-    "end_ms": 1140,
-    "action": "suppress"
-  },
-  {
-    "service": "auth",
-    "start_ms": 920,
-    "end_ms": 980,
-    "action": "boost"
-  },
-  {
-    "service": "auth",
-    "start_ms": 2390,
-    "end_ms": 2650,
-    "action": "suppress"
-  },
-  {
-    "service": "auth",
-    "start_ms": 2420,
-    "end_ms": 2480,
-    "action": "boost"
-  },
-  {
-    "service": "billing",
-    "start_ms": 990,
-    "end_ms": 1310,
-    "action": "suppress"
-  },
-  {
-    "service": "billing",
-    "start_ms": 1020,
-    "end_ms": 1080,
-    "action": "boost"
-  },
-  {
-    "service": "search",
-    "start_ms": 190,
-    "end_ms": 575,
-    "action": "suppress"
-  },
-  {
-    "service": "search",
-    "start_ms": 220,
-    "end_ms": 280,
-    "action": "boost"
-  },
-  {
-    "service": "search",
-    "start_ms": 2590,
-    "end_ms": 2840,
-    "action": "suppress"
-  },
-  {
-    "service": "search",
-    "start_ms": 2620,
-    "end_ms": 2680,
-    "action": "boost"
-  },
-  {
-    "service": "gateway",
-    "start_ms": 890,
-    "end_ms": 1160,
-    "action": "suppress"
-  },
-  {
-    "service": "gateway",
-    "start_ms": 920,
-    "end_ms": 980,
-    "action": "boost"
-  },
-  {
-    "service": "gateway",
-    "start_ms": 2690,
-    "end_ms": 3050,
-    "action": "suppress"
-  },
-  {
-    "service": "gateway",
-    "start_ms": 2720,
-    "end_ms": 2780,
-    "action": "boost"
-  },
-  {
-    "service": "cache",
-    "start_ms": 550,
-    "end_ms": 740,
-    "action": "suppress"
-  },
-  {
-    "service": "cache",
-    "start_ms": 580,
+    "start_ms": 489,
     "end_ms": 640,
+    "action": "suppress"
+  },
+  {
+    "service": "auth",
+    "start_ms": 513,
+    "end_ms": 574,
+    "action": "boost"
+  },
+  {
+    "service": "auth",
+    "start_ms": 1289,
+    "end_ms": 1610,
+    "action": "suppress"
+  },
+  {
+    "service": "auth",
+    "start_ms": 1313,
+    "end_ms": 1374,
+    "action": "boost"
+  },
+  {
+    "service": "billing",
+    "start_ms": 139,
+    "end_ms": 279,
+    "action": "suppress"
+  },
+  {
+    "service": "billing",
+    "start_ms": 163,
+    "end_ms": 224,
+    "action": "boost"
+  },
+  {
+    "service": "billing",
+    "start_ms": 959,
+    "end_ms": 1089,
+    "action": "suppress"
+  },
+  {
+    "service": "billing",
+    "start_ms": 983,
+    "end_ms": 1044,
+    "action": "boost"
+  },
+  {
+    "service": "search",
+    "start_ms": 189,
+    "end_ms": 454,
+    "action": "suppress"
+  },
+  {
+    "service": "search",
+    "start_ms": 213,
+    "end_ms": 274,
+    "action": "boost"
+  },
+  {
+    "service": "search",
+    "start_ms": 1389,
+    "end_ms": 1514,
+    "action": "suppress"
+  },
+  {
+    "service": "search",
+    "start_ms": 1413,
+    "end_ms": 1474,
+    "action": "boost"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 589,
+    "end_ms": 726,
+    "action": "suppress"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 613,
+    "end_ms": 674,
+    "action": "boost"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 1439,
+    "end_ms": 1580,
+    "action": "suppress"
+  },
+  {
+    "service": "gateway",
+    "start_ms": 1463,
+    "end_ms": 1524,
     "action": "boost"
   },
   {
     "service": "cache",
-    "start_ms": 1550,
-    "end_ms": 1800,
+    "start_ms": 439,
+    "end_ms": 568,
     "action": "suppress"
   },
   {
     "service": "cache",
-    "start_ms": 1580,
-    "end_ms": 1640,
+    "start_ms": 463,
+    "end_ms": 524,
+    "action": "boost"
+  },
+  {
+    "service": "cache",
+    "start_ms": 1139,
+    "end_ms": 1284,
+    "action": "suppress"
+  },
+  {
+    "service": "cache",
+    "start_ms": 1163,
+    "end_ms": 1224,
     "action": "boost"
   },
   {
     "service": "storage",
-    "start_ms": 1810,
-    "end_ms": 2130,
+    "start_ms": 909,
+    "end_ms": 1042,
     "action": "suppress"
   },
   {
     "service": "storage",
-    "start_ms": 1840,
-    "end_ms": 1900,
+    "start_ms": 933,
+    "end_ms": 994,
     "action": "boost"
   },
   {
     "service": "cdn",
-    "start_ms": 1190,
-    "end_ms": 1540,
+    "start_ms": 689,
+    "end_ms": 838,
     "action": "suppress"
   },
   {
     "service": "cdn",
-    "start_ms": 1220,
-    "end_ms": 1280,
+    "start_ms": 713,
+    "end_ms": 774,
     "action": "boost"
   },
   {
     "service": "stream",
-    "start_ms": 890,
-    "end_ms": 1300,
+    "start_ms": 629,
+    "end_ms": 769,
     "action": "suppress"
   },
   {
     "service": "stream",
-    "start_ms": 920,
-    "end_ms": 980,
-    "action": "boost"
-  },
-  {
-    "service": "ledger",
-    "start_ms": 90,
-    "end_ms": 450,
-    "action": "suppress"
-  },
-  {
-    "service": "ledger",
-    "start_ms": 120,
-    "end_ms": 180,
-    "action": "boost"
-  },
-  {
-    "service": "ledger",
-    "start_ms": 1590,
-    "end_ms": 1830,
-    "action": "suppress"
-  },
-  {
-    "service": "ledger",
-    "start_ms": 1620,
-    "end_ms": 1680,
+    "start_ms": 653,
+    "end_ms": 714,
     "action": "boost"
   }
 ]
