@@ -524,6 +524,18 @@ Shift lead logged routine rollout observation for auth (east) during review wind
 Historical CSV escalation exports remain archived and non-authoritative for the JSON compile acceptance.
 > **Change-review decision (2026-05-02 - CAB-2201)** Ilya: canonical service labels are trimmed and lowercased, then folded through the alias table: `authentication` -> `auth`, `payments` -> `billing`, `search-api` -> `search`. This supersedes CAB-1903.
 
+### Review entry 0812 — debt bench
+> **Change-review decision (2026-05-16 - CAB-2242)** Ilya: the debt credit applied to the dispatchable duration was losing every partial step, so a debt carry smaller than one full step credited nothing. That credit now ROUNDS UP: `debt_adjusted_dispatchable_ms = dispatchable_billable_duration_ms + ceil(debt_in_ms / 5)`. In integer arithmetic ceil(x/5) is -(-x // 5). The `// 3` idle decay and the debt_out cap recorded earlier are unchanged and still round down. This revises the floored credit in CAB-2236.
+
+### Review entry 0816 — probe bench
+> **Change-review decision (2026-05-17 - CAB-2246)** Dana: the blackout probe takes the same correction and no other: `blackout_pressure_score = (blackout_all_probe_ms // 36) + ceil(blackout_severity_probe_ms / 24) + blackout_segment_count`. The degrade probe was reviewed in the same session and is deliberately left floored on both halves, so the two must not be assumed symmetric.
+
+### Review entry 0818 — debt bench
+> **Change-review decision (2026-05-17 - CAB-2248)** Ilya: the debt-in half of the debt pressure score ROUNDS UP while the debt-out half does not: `debt_pressure_score = (debt_out_ms // 80) + ceil(debt_in_ms / 120)`. The 80 debt-out divisor is unchanged.
+
+### Review entry 0820 — audit bench
+> **Change-review decision (2026-05-18 - CAB-2250)** Ilya: recording the rounding map settled across CAB-2224, CAB-2242, CAB-2246 and CAB-2248 for the avoidance of doubt. Rounding in this compiler is NOT uniform and no divisor's direction may be inferred from any other, including between siblings in the same family: the suppression unit count and the four probe/unit families each carry their own direction, and the degrade and handoff probes stay floored where the blackout probe rounds up. Read each divisor's direction from its own governing decision.
+
 ### Review entry 0121 — billing lane
 Shift lead logged routine rollout observation for billing (west) during review window 0121. Dashboard tiles for responder load lagged during the sync window; attributed to cache refresh, not the compiler.
 Reviewers should reconcile behavior questions against the CAB decision entries rather than chat excerpts.

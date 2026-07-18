@@ -620,7 +620,8 @@ def merge_windows(
                 else max(previous_debt_out_ms - (idle_gap_ms // 3), 0)
             )
             debt_adjusted_dispatchable_ms = (
-                block["dispatchable_billable_duration_ms"] + (debt_in_ms // 5)
+                # Debt credit ROUNDS UP per CAB-2242. ceil(x/5) = -(-x // 5).
+                block["dispatchable_billable_duration_ms"] + (-(-debt_in_ms // 5))
             )
             debt_out_ms = min(
                 debt_in_ms
@@ -714,7 +715,8 @@ def build_queue(
             )
             blackout_pressure_score = (
                 (blackout_all_probe_ms // 36)
-                + (blackout_severity_probe_ms // 24)
+                # Severity-scoped blackout probe ROUNDS UP per CAB-2246. ceil(x/24)=-(-x//24).
+                + (-(-blackout_severity_probe_ms // 24))
                 + block["blackout_segment_count"]
             )
             degrade_all_probe_ms = _probe_overlap_ms(
@@ -734,7 +736,8 @@ def build_queue(
             )
             debt_pressure_score = (
                 (block["debt_out_ms"] // 80)
-                + (block["debt_in_ms"] // 120)
+                # Debt-in term ROUNDS UP per CAB-2248. ceil(x/120)=-(-x//120).
+                + (-(-block["debt_in_ms"] // 120))
             )
 
             exception_balance_score = int(boost_units - suppress_units)

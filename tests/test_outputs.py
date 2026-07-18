@@ -321,8 +321,10 @@ def test_window_shape_and_sorting(windows: dict[str, list[dict]]):
                 block["routed_billable_duration_ms"] - (block["degrade_overlap_ms"] // 4),
                 0,
             )
+            # Debt credit rounds UP per CAB-2242; the layer divisors above stay floored.
             assert block["debt_adjusted_dispatchable_ms"] == (
-                block["dispatchable_billable_duration_ms"] + (block["debt_in_ms"] // 5)
+                block["dispatchable_billable_duration_ms"]
+                + (-(-block["debt_in_ms"] // 5))
             )
             assert block["debt_out_ms"] >= block["debt_in_ms"]
             assert block["source_incident_ids"] == sorted(block["source_incident_ids"])
@@ -1201,12 +1203,15 @@ def test_debt_ledger_propagates_and_decays_between_windows():
             assert second["idle_gap_ms"] == 70
             assert second["debt_in_ms"] == 377
             assert second["debt_out_ms"] == 667
-            assert second["debt_adjusted_dispatchable_ms"] == 365
+            # 290 + ceil(377/5) = 290 + 76; the floored credit would have given 365
+            assert second["debt_adjusted_dispatchable_ms"] == 366
             queue_by_start = {row["start_ms"]: row for row in queue}
             assert queue_by_start[0]["debt_pressure_score"] == 5
-            assert queue_by_start[470]["debt_pressure_score"] == 11
+            # debt_out//80 + ceil(debt_in/120) = 8 + 4 per CAB-2248 (floored debt_in gave 11)
+            assert queue_by_start[470]["debt_pressure_score"] == 12
             assert summary["max_debt_out_ms"] == 667
-            assert summary["total_debt_adjusted_dispatchable_downtime_ms"] == 765
+            # 400 + 366; the second window gained 1ms from the ceilinged debt credit
+            assert summary["total_debt_adjusted_dispatchable_downtime_ms"] == 766
     finally:
         MAINTENANCE_PATH.write_text(original_maint)
         EXCEPTIONS_PATH.write_text(original_ex)

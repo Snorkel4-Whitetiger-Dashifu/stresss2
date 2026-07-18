@@ -27,7 +27,7 @@
       "policy_queue_min_ms": "equal to selected profile's queue_min_effective_ms before unit penalties/credits",
       "outage_signature": "first 12 lowercase hex chars of sha1(service|start_ms|end_ms|comma_joined_source_incident_ids|window_signature|max_severity|maintenance_span_count|policy_profile|suppression_overlap_ms|boost_overlap_ms|effective_queue_min_ms|adjusted_queue_min_ms|handoff_overlap_ms|handoff_pressure_score|blackout_overlap_ms|blackout_pressure_score|routed_queue_min_ms|degrade_overlap_ms|degrade_pressure_score|dispatch_queue_min_ms|debt_in_ms|debt_out_ms|debt_adjusted_dispatchable_ms|debt_pressure_score|exception_balance_score)",
       "queue_digest": "first 10 lowercase hex chars of sha1(window_id|priority|escalation_score|handoff_pressure_score|blackout_pressure_score|degrade_pressure_score|debt_pressure_score|risk_vector)",
-      "identifier_note": "window_signature, outage_signature and queue_digest are TRUNCATED sha1 hex digests — 10, 12 and 10 lowercase hex characters respectively — NOT full-length hashes. Do not emit a 40-char sha1 or a 64-char sha256 for these fields; truncate to the stated length. This is distinct from the summary checksum fields, which are full 64-char sha256 digests.",
+      "identifier_note": "window_signature, outage_signature and queue_digest are TRUNCATED sha1 hex digests \u2014 10, 12 and 10 lowercase hex characters respectively \u2014 NOT full-length hashes. Do not emit a 40-char sha1 or a 64-char sha256 for these fields; truncate to the stated length. This is distinct from the summary checksum fields, which are full 64-char sha256 digests.",
       "identifier_test_vectors": {
         "window_signature_payload": "search|100|400|h1|critical|0|0|0",
         "window_signature": "f83923a455",
@@ -260,16 +260,55 @@
     "note": "canonical_incident_count, severity_counts, planned_excluded_count and canonical_input_checksum are computed over ALL canonical deduplicated incidents INCLUDING planned ones. Planned incidents never form service windows, so these four fields cannot be reconstructed from service_windows.json or incident_queue.jsonl and have no other feedback handle. The worked example below isolates them end to end: it exercises duplicate grouping and its tie-break, service-alias folding, severity normalization, and planned coercion (all defined authoritatively in /app/incident/rollout_review_log.md), and pins the exact counts and canonical_input_checksum serialization. raw_incident_count and unique_incident_ids are taken from the raw input before canonicalization and are shown for completeness. policy_checksum is not listed here because the resolved policy fields also drive the queue's scoring and thresholds, so a matching incident_queue already fixes it.",
     "worked_example": {
       "input_incidents": [
-        {"incident_id": "d1", "service": "authentication", "start_ms": 100, "end_ms": 200, "severity": "major", "planned": false},
-        {"incident_id": "d1", "service": "auth", "start_ms": 100, "end_ms": 260, "severity": "critical", "planned": true},
-        {"incident_id": "d2", "service": "payments", "start_ms": 300, "end_ms": 500, "severity": "unknown", "planned": 0},
-        {"incident_id": "d3", "service": "search-api", "start_ms": 400, "end_ms": 700, "severity": "minor", "planned": "true"},
-        {"incident_id": "d4", "service": "auth", "start_ms": 800, "end_ms": 900, "severity": "critical", "planned": "false"}
+        {
+          "incident_id": "d1",
+          "service": "authentication",
+          "start_ms": 100,
+          "end_ms": 200,
+          "severity": "major",
+          "planned": false
+        },
+        {
+          "incident_id": "d1",
+          "service": "auth",
+          "start_ms": 100,
+          "end_ms": 260,
+          "severity": "critical",
+          "planned": true
+        },
+        {
+          "incident_id": "d2",
+          "service": "payments",
+          "start_ms": 300,
+          "end_ms": 500,
+          "severity": "unknown",
+          "planned": 0
+        },
+        {
+          "incident_id": "d3",
+          "service": "search-api",
+          "start_ms": 400,
+          "end_ms": 700,
+          "severity": "minor",
+          "planned": "true"
+        },
+        {
+          "incident_id": "d4",
+          "service": "auth",
+          "start_ms": 800,
+          "end_ms": 900,
+          "severity": "critical",
+          "planned": "false"
+        }
       ],
       "raw_incident_count": 5,
       "unique_incident_ids": 4,
       "canonical_incident_count": 4,
-      "severity_counts": {"critical": 2, "major": 0, "minor": 2},
+      "severity_counts": {
+        "critical": 2,
+        "major": 0,
+        "minor": 2
+      },
       "planned_excluded_count": 2,
       "canonical_payload": "d1|auth|100|260|critical|1\nd4|auth|800|900|critical|0\nd2|billing|300|500|minor|0\nd3|search|400|700|minor|1",
       "canonical_input_checksum": "6b7585fc3353f6e3588f5dd510ffa2dd8ded3fb9a693f5e39fc40c3ee294fe17"
@@ -283,5 +322,18 @@
   "semantics_source": {
     "notes": "This document is the output contract only: file paths, schemas, exact key sets, identifier payloads and checksum encodings. It does NOT define how values are derived.",
     "authority": "Normalization, dedupe tie-breaks, interval and overlap semantics, domain ordering, policy resolution, attenuation, the debt ledger, unit and threshold math, scoring, priority rules and queue ordering were settled by the change-advisory board; the authoritative record is /app/incident/rollout_review_log.md. Where an early draft proposal conflicts with a later CAB decision, the later decision wins."
+  },
+  "canonical_service_label_scope": {
+    "_note": "Scope declaration only. The alias table, the trim/lowercase rules and every other canonicalization value are defined authoritatively in /app/incident/rollout_review_log.md; this entry fixes only WHERE the resulting label is used.",
+    "rule": "Service labels are canonicalized once -- trimmed, lowercased, then folded through the alias table -- and the resulting canonical label is the service identity used EVERYWHERE downstream. It is not confined to canonical counting.",
+    "applies_to": [
+      "duplicate grouping and its tie-break",
+      "severity_counts, canonical_incident_count, planned_excluded_count and canonical_input_checksum",
+      "service window construction and the window's service key",
+      "policy, exception, handoff, blackout and degrade DOMAIN MATCHING",
+      "domain compaction, performed on the folded label, BEFORE any overlap milliseconds are computed",
+      "queue rows, their thresholds and every checksum derived from the above"
+    ],
+    "consequence": "Two raw labels that fold to the same canonical label are the same service for compaction and overlap purposes: their policy spans compact together as one domain, and the overlap is computed once against the merged spans. Compacting the raw labels separately and only folding afterwards produces different overlap milliseconds and therefore different durations, queue membership and checksums."
   }
 }
