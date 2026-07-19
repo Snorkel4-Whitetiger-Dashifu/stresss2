@@ -186,7 +186,8 @@
       "planned_excluded_count": "number of canonical deduplicated incidents whose normalized planned value is true",
       "critical_window_count": "number of all service windows whose max_severity is critical, whether queued or not"
     },
-    "service_windows_container_contract": "service_windows.json is a JSON object (not an array): a flat map from canonical service name to the list of that service's merged window objects. Service keys are sorted ascending; each service's window list is sorted by start_ms ascending. Every window object carries exactly the service_windows_exact_keys fields. Do not wrap the map in metadata keys and do not emit a flat array of windows."
+    "service_windows_container_contract": "service_windows.json is a JSON object (not an array): a flat map from canonical service name to the list of that service's merged window objects. Service keys are sorted ascending; each service's window list is sorted by start_ms ascending. Every window object carries exactly the service_windows_exact_keys fields. Do not wrap the map in metadata keys and do not emit a flat array of windows.",
+    "summary_schema_version_note": "Fixed contract constant. Emit `schema_version` verbatim as this string; it is not derived from the incident data and does not vary by input."
   },
   "checksums": {
     "serialization": {
