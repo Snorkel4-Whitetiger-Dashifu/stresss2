@@ -546,7 +546,7 @@ Historical CSV escalation exports remain archived and non-authoritative for the 
 > **Change-review decision (2026-05-20 - CAB-2256)** Ilya: boost units are counted the same way suppression units already are — `boost_units = ceil(boost_overlap_ms / boost_unit_ms)` — because a partial boost window was previously granting no credit at all. The handoff, blackout and degrade unit counts keep their floors and are not affected by this entry.
 
 ### Review entry 0820 — audit bench
-> **Change-review decision (2026-05-18 - CAB-2250)** Ilya: recording the rounding map settled across CAB-2224, CAB-2242, CAB-2246, CAB-2248, CAB-2252, CAB-2254 and CAB-2256 for the avoidance of doubt. Rounding in this compiler is NOT uniform and no divisor's direction may be inferred from any other, including between siblings in the same family: the suppression unit count and the four probe/unit families each carry their own direction, and the degrade and handoff probes stay floored where the blackout probe rounds up. Read each divisor's direction from its own governing decision.
+> **Change-review decision (2026-05-18 - CAB-2250)** Ilya: recording the rounding map settled across CAB-2224, CAB-2242, CAB-2246, CAB-2248, CAB-2252, CAB-2254 and CAB-2256 for the avoidance of doubt. Rounding in this compiler is NOT uniform and no divisor's direction may be inferred from any other, including between siblings in the same family: the suppression unit count and the four probe/unit families each carry their own direction, and the degrade and handoff probes stay floored where the blackout probe rounds up. Read each divisor's direction from its own governing decision. *(Revised on the degrade probe point — see CAB-2264.)*
 
 ### Review entry 0121 — billing lane
 Shift lead logged routine rollout observation for billing (west) during review window 0121. Dashboard tiles for responder load lagged during the sync window; attributed to cache refresh, not the compiler.
@@ -2220,6 +2220,7 @@ The quarterly tabletop walked the outage-to-responder path end to end with the c
 
 
 > **Change-review decision (2026-06-03 - CAB-2262)** Dana: quarterly access recertification for the routing path samples service-to-service grants at twice the standard rate through year end. Access policy; no compiler impact.
+> **Change-review decision (2026-05-30 - CAB-2264)** Marta: degrade probe rounding, and the rounding map of record. The SEVERITY-scoped half of the degrade probe now ROUNDS UP (ceiling) while the all-scoped half keeps its floor: `degrade_pressure_score = (degrade_all_probe_ms // 34) + ceil(degrade_severity_probe_ms / 23) + degrade_segment_count`. In integer arithmetic ceil(x/23) is -(-x // 23). This revises the floored `degrade_severity_probe_ms // 23` written in CAB-2227, which is superseded on this point only: the probe range [end_ms-210, end_ms+1), the divisors 34 and 23, the all-scoped floor and the segment term are unchanged. This entry also supersedes CAB-2250 as the rounding map of record: rounding remains NON-uniform and no divisor's direction may be inferred from any other, but the degrade probe no longer stays floored on both halves — only the handoff probe does. Read each divisor's direction from its own governing decision.
 
 
 ### Review entry 0529 — checkout lane

@@ -735,7 +735,7 @@ def build_queue(
             )
             degrade_pressure_score = (
                 (degrade_all_probe_ms // 34)
-                + (degrade_severity_probe_ms // 23)
+                + (-(-degrade_severity_probe_ms // 23))
                 + block["degrade_segment_count"]
             )
             debt_pressure_score = (

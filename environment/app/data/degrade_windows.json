@@ -52,5 +52,179 @@
     "severity_scope": "all",
     "start_ms": 1217,
     "end_ms": 1264
+  },
+  {
+    "service": "auth",
+    "severity_scope": "critical",
+    "start_ms": 263,
+    "end_ms": 310
+  },
+  {
+    "service": "auth",
+    "severity_scope": "major",
+    "start_ms": 681,
+    "end_ms": 742
+  },
+  {
+    "service": "auth",
+    "severity_scope": "critical",
+    "start_ms": 1047,
+    "end_ms": 1118
+  },
+  {
+    "service": "auth",
+    "severity_scope": "critical",
+    "start_ms": 1820,
+    "end_ms": 1909
+  },
+  {
+    "service": "auth",
+    "severity_scope": "major",
+    "start_ms": 2233,
+    "end_ms": 2280
+  },
+  {
+    "service": "auth",
+    "severity_scope": "minor",
+    "start_ms": 2779,
+    "end_ms": 2840
+  },
+  {
+    "service": "billing",
+    "severity_scope": "critical",
+    "start_ms": 308,
+    "end_ms": 379
+  },
+  {
+    "service": "billing",
+    "severity_scope": "major",
+    "start_ms": 691,
+    "end_ms": 780
+  },
+  {
+    "service": "billing",
+    "severity_scope": "critical",
+    "start_ms": 1109,
+    "end_ms": 1156
+  },
+  {
+    "service": "billing",
+    "severity_scope": "major",
+    "start_ms": 1655,
+    "end_ms": 1716
+  },
+  {
+    "service": "billing",
+    "severity_scope": "major",
+    "start_ms": 2753,
+    "end_ms": 2824
+  },
+  {
+    "service": "cache",
+    "severity_scope": "minor",
+    "start_ms": 241,
+    "end_ms": 330
+  },
+  {
+    "service": "cache",
+    "severity_scope": "minor",
+    "start_ms": 586,
+    "end_ms": 633
+  },
+  {
+    "service": "cache",
+    "severity_scope": "major",
+    "start_ms": 953,
+    "end_ms": 1014
+  },
+  {
+    "service": "cache",
+    "severity_scope": "critical",
+    "start_ms": 1318,
+    "end_ms": 1389
+  },
+  {
+    "service": "cdn",
+    "severity_scope": "major",
+    "start_ms": 271,
+    "end_ms": 360
+  },
+  {
+    "service": "cdn",
+    "severity_scope": "critical",
+    "start_ms": 876,
+    "end_ms": 923
+  },
+  {
+    "service": "gateway",
+    "severity_scope": "major",
+    "start_ms": 294,
+    "end_ms": 355
+  },
+  {
+    "service": "gateway",
+    "severity_scope": "critical",
+    "start_ms": 752,
+    "end_ms": 823
+  },
+  {
+    "service": "gateway",
+    "severity_scope": "minor",
+    "start_ms": 1138,
+    "end_ms": 1227
+  },
+  {
+    "service": "gateway",
+    "severity_scope": "critical",
+    "start_ms": 1611,
+    "end_ms": 1658
+  },
+  {
+    "service": "search",
+    "severity_scope": "major",
+    "start_ms": 609,
+    "end_ms": 670
+  },
+  {
+    "service": "search",
+    "severity_scope": "critical",
+    "start_ms": 1066,
+    "end_ms": 1137
+  },
+  {
+    "service": "search",
+    "severity_scope": "major",
+    "start_ms": 1529,
+    "end_ms": 1618
+  },
+  {
+    "service": "storage",
+    "severity_scope": "critical",
+    "start_ms": 357,
+    "end_ms": 404
+  },
+  {
+    "service": "storage",
+    "severity_scope": "critical",
+    "start_ms": 1064,
+    "end_ms": 1125
+  },
+  {
+    "service": "stream",
+    "severity_scope": "minor",
+    "start_ms": 308,
+    "end_ms": 379
+  },
+  {
+    "service": "stream",
+    "severity_scope": "critical",
+    "start_ms": 799,
+    "end_ms": 888
+  },
+  {
+    "service": "stream",
+    "severity_scope": "major",
+    "start_ms": 1234,
+    "end_ms": 1281
   }
 ]
