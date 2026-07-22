@@ -28,3 +28,25 @@ The compile is scheduled through a cron drop-in at `/etc/cron.d/outage-compile`,
 ## Output directory
 
 `/app/output` is owned `svc-outage:svc-outage` with mode `0750`. World-writable output directories are a rollout defect and must not survive recovery.
+
+## Log directory
+
+The compile writes its run log under `/var/log/outage-compile`. The directory is owned `svc-outage:svc-outage` with mode `0750`; a world-writable log directory is a rollout defect and must not survive recovery. The crashed rollout also left an unrotated leftover at `/var/log/outage-compile/compile.log.0` — recovery prunes rollout leftovers rather than leaving them for the next rotation. The live `compile.log` itself stays in place.
+
+## Log rotation
+
+Rotation is configured by a drop-in at `/etc/logrotate.d/outage-compile`, mode `0644`, owned root, covering `/var/log/outage-compile/*.log` and declaring exactly these directives:
+
+```
+/var/log/outage-compile/*.log {
+    daily
+    rotate 14
+    compress
+    missingok
+    notifempty
+    su svc-outage svc-outage
+    create 0640 svc-outage svc-outage
+}
+```
+
+Rotation runs as the service account, not as root: the `su` and `create` lines are what keep rotated files owned by `svc-outage`.

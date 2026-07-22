@@ -641,6 +641,11 @@ def test_cli_defaults_work_and_match_explicit_run():
 
 
 def test_maintenance_source_path_affects_output():
+    """Maintenance windows are read from their fixed source path at run time.
+
+    Emptying the maintenance source changes the maintenance overlap the summary reports,
+    proving the compile re-reads that file rather than carrying overlaps baked in at build.
+    """
     original = MAINTENANCE_PATH.read_text()
     try:
         MAINTENANCE_PATH.write_text("[]\n")
@@ -657,6 +662,11 @@ def test_maintenance_source_path_affects_output():
 
 
 def test_policy_source_path_affects_output():
+    """Response policies are resolved from their fixed source path at run time.
+
+    Rewriting the policy source changes the compiled queue, proving thresholds come from the
+    policy file rather than from values hardcoded in the compile.
+    """
     original = POLICY_PATH.read_text()
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -699,6 +709,11 @@ def test_policy_source_path_affects_output():
 
 
 def test_sparse_policy_and_override_inherit_complete_defaults():
+    """A sparse policy file still yields a complete effective policy.
+
+    Keys absent from both the default block and a service override fall back to the contract's
+    built-in defaults, so a partial policy never produces missing or null thresholds.
+    """
     original = POLICY_PATH.read_text()
     try:
         _write_json(
@@ -726,6 +741,11 @@ def test_sparse_policy_and_override_inherit_complete_defaults():
 
 
 def test_exception_source_path_affects_output():
+    """Routing exceptions are read from their fixed source path at run time.
+
+    Rewriting the exception source changes the compiled output, proving exceptions are not
+    baked into the compile.
+    """
     original = EXCEPTIONS_PATH.read_text()
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -752,6 +772,11 @@ def test_exception_source_path_affects_output():
 
 
 def test_handoff_source_path_affects_output():
+    """Handoff windows are read from their fixed source path at run time.
+
+    Rewriting the handoff source changes the compiled output, proving the attenuation layer
+    reads that file rather than carrying its spans internally.
+    """
     original = HANDOFF_PATH.read_text()
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -779,6 +804,11 @@ def test_handoff_source_path_affects_output():
 
 
 def test_blackout_source_path_affects_output():
+    """Blackout windows are read from their fixed source path at run time.
+
+    Rewriting the blackout source changes the compiled output, proving the attenuation layer
+    reads that file rather than carrying its spans internally.
+    """
     original = BLACKOUT_PATH.read_text()
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -809,6 +839,11 @@ def test_blackout_source_path_affects_output():
 
 
 def test_degrade_source_path_affects_output():
+    """Degrade windows are read from their fixed source path at run time.
+
+    Rewriting the degrade source changes the compiled output, proving the attenuation layer
+    reads that file rather than carrying its spans internally.
+    """
     original = DEGRADE_PATH.read_text()
     try:
         with tempfile.TemporaryDirectory() as tmp:
@@ -839,6 +874,11 @@ def test_degrade_source_path_affects_output():
 
 
 def test_maintenance_compaction_and_span_count_exercised():
+    """Overlapping and touching maintenance windows are compacted before measurement.
+
+    Windows for the same service merge into unioned spans, so the measured overlap and the
+    reported span count follow the merged spans rather than the raw row count.
+    """
     original = MAINTENANCE_PATH.read_text()
     try:
         maintenance_rows = [
@@ -875,6 +915,11 @@ def test_maintenance_compaction_and_span_count_exercised():
 
 
 def test_dedupe_tie_break_chain_exercised():
+    """Duplicate incident_id rows collapse to one row via the full governed tie-break chain.
+
+    The surviving row is selected by the ordered tie-break rules, not by input order, so
+    reordering the duplicates cannot change which row wins.
+    """
     original = MAINTENANCE_PATH.read_text()
     try:
         MAINTENANCE_PATH.write_text("[]\n")
@@ -905,6 +950,11 @@ def test_dedupe_tie_break_chain_exercised():
 
 
 def test_planned_coercion_aliases_and_unknown_severity_exercised():
+    """Canonicalization coerces planned aliases and normalizes unknown severities.
+
+    String forms of the planned flag are parsed to booleans and a severity outside the known
+    set falls back to its governed default, so raw input spellings never reach the aggregates.
+    """
     original = MAINTENANCE_PATH.read_text()
     try:
         MAINTENANCE_PATH.write_text("[]\n")
@@ -930,6 +980,11 @@ def test_planned_coercion_aliases_and_unknown_severity_exercised():
 
 
 def test_exception_compaction_and_balance_exercised():
+    """Routing exceptions compact per normalized service and net out by action.
+
+    Boost and suppress spans merge before use and are balanced under the governed precedence
+    rather than being counted independently.
+    """
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()
     try:
@@ -974,6 +1029,11 @@ def test_exception_compaction_and_balance_exercised():
 
 
 def test_handoff_compaction_and_scope_exercised():
+    """Handoff windows compact per (service, severity scope) and match only in-scope outages.
+
+    A window attenuates an outage only when its severity scope covers that outage, and the
+    overlap is measured against the merged in-scope spans.
+    """
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()
     original_handoff = HANDOFF_PATH.read_text()
@@ -1033,6 +1093,11 @@ def test_handoff_compaction_and_scope_exercised():
 
 
 def test_blackout_compaction_and_scope_exercised():
+    """Blackout windows compact per (service, severity scope) and match only in-scope outages.
+
+    Overlap is measured against the merged in-scope spans, so out-of-scope windows contribute
+    nothing and duplicate spans are not double-counted.
+    """
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()
     original_handoff = HANDOFF_PATH.read_text()
@@ -1096,6 +1161,11 @@ def test_blackout_compaction_and_scope_exercised():
 
 
 def test_degrade_compaction_and_scope_exercised():
+    """Degrade windows compact per (service, severity scope) and match only in-scope outages.
+
+    Overlap is measured against the merged in-scope spans, so out-of-scope windows contribute
+    nothing and duplicate spans are not double-counted.
+    """
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()
     original_handoff = HANDOFF_PATH.read_text()
@@ -1161,6 +1231,11 @@ def test_degrade_compaction_and_scope_exercised():
 
 
 def test_debt_ledger_propagates_and_decays_between_windows():
+    """The per-service debt ledger carries between consecutive windows and decays across idle gaps.
+
+    A window's ledger-adjusted duration therefore depends on the windows preceding it in the
+    same service, not on that window in isolation.
+    """
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()
     original_handoff = HANDOFF_PATH.read_text()
@@ -1282,6 +1357,11 @@ def test_debt_ledger_resets_after_extended_idle_gap():
 
 
 def test_effective_queue_threshold_uses_exception_units_and_ceil_suppress():
+    """Queue admission uses the exception-unit arithmetic with the suppression count rounded up.
+
+    The effective threshold is derived from boost and suppress unit counts under the governed
+    rounding direction, so admission follows the unit arithmetic rather than the raw threshold.
+    """
     original_maint = MAINTENANCE_PATH.read_text()
     original_ex = EXCEPTIONS_PATH.read_text()
     original_policy = POLICY_PATH.read_text()
@@ -1435,3 +1515,70 @@ def test_output_dir_ownership_and_mode():
     assert info.st_uid == entry.pw_uid
     assert info.st_gid == entry.pw_gid
     assert (info.st_mode & 0o777) == 0o750
+
+
+def test_governing_entry_index_is_complete():
+    """Every governing (non-superseded) review entry is reachable from the index.
+
+    The instruction directs agents to the index, so an entry missing from it is
+    effectively undiscoverable no matter how clearly the log states the rule.
+    """
+    import re
+    gi = CONTRACT["governing_entry_index"]
+    listed = {e for v in gi["stages"].values() for e in v}
+    nonnorm = set(re.findall(r"CAB-\d+", gi.get("non_normative_entries", "")))
+    log_text = Path("/app/incident/rollout_review_log.md").read_text(encoding="utf-8")
+    pattern = re.compile(r"\*\*[A-Za-z -]+? \(\d{4}-\d{2}-\d{2} - (CAB-\d+)\)\*\*([^\n]*)")
+    governing = {
+        m.group(1)
+        for m in pattern.finditer(log_text)
+        if "*(superseded" not in m.group(2).lower() and "*(revised" not in m.group(2).lower()
+    }
+    assert governing, "no governing entries found -- parser drifted from the log format"
+    missing = sorted(governing - listed - nonnorm)
+    assert not missing, f"governing entries absent from governing_entry_index: {missing}"
+
+
+def test_log_directory_ownership_and_mode():
+    """/var/log/outage-compile is handed to the service account and is not world-writable.
+
+    The rollout left the compile log directory root-owned at mode 0777. Recovery must place it
+    under svc-outage:svc-outage at mode 0750, since the scheduled compile writes there as that
+    account and a world-writable log directory is a rollout defect.
+    """
+    import pwd
+
+    log_dir = Path("/var/log/outage-compile")
+    assert log_dir.is_dir(), "compile log directory is missing"
+    info = log_dir.stat()
+    svc = pwd.getpwnam("svc-outage")
+    assert info.st_uid == svc.pw_uid and info.st_gid == svc.pw_gid, "log dir not owned by svc-outage"
+    assert (info.st_mode & 0o777) == 0o750, "log dir must be 0750, not world-writable"
+
+
+def test_rollout_leftover_log_pruned():
+    """The crashed rollout's unrotated leftover is removed while the live log survives.
+
+    /var/log/outage-compile/compile.log.0 was left behind mid-compile and must be pruned during
+    recovery rather than handed to the next rotation. The live compile.log is not a leftover and
+    must remain in place.
+    """
+    assert not Path("/var/log/outage-compile/compile.log.0").exists(), "rollout leftover not pruned"
+    assert Path("/var/log/outage-compile/compile.log").exists(), "live compile log was removed"
+
+
+def test_logrotate_dropin_installed():
+    """Rotation is configured to run as the service account, not as root.
+
+    The drop-in at /etc/logrotate.d/outage-compile must exist at mode 0644 covering the compile
+    log glob, and must carry the su/create directives that keep rotated files owned by
+    svc-outage along with the documented retention and safety directives.
+    """
+    dropin = Path("/etc/logrotate.d/outage-compile")
+    assert dropin.exists(), "logrotate drop-in was never installed"
+    assert (dropin.stat().st_mode & 0o777) == 0o644, "logrotate drop-in must be mode 0644"
+    text = dropin.read_text(encoding="utf-8")
+    assert "/var/log/outage-compile/*.log" in text, "drop-in does not cover the compile log glob"
+    for directive in ("daily", "rotate 14", "compress", "missingok", "notifempty",
+                      "su svc-outage svc-outage", "create 0640 svc-outage svc-outage"):
+        assert directive in text, f"logrotate drop-in missing required directive: {directive}"

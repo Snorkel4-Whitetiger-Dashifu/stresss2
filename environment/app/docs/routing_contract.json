@@ -461,14 +461,15 @@
     "consequence": "Two raw labels that fold to the same canonical label are the same service for compaction and overlap purposes: their policy spans compact together as one domain, and the overlap is computed once against the merged spans. Compacting the raw labels separately and only folding afterwards produces different overlap milliseconds and therefore different durations, queue membership and checksums."
   },
   "governing_entry_index": {
-    "_note": "Navigation aid only. It records WHICH review entries carry the governing rule for each pipeline stage; it does not restate any rule, value, divisor, threshold or rounding direction. Read the named entries in /app/incident/rollout_review_log.md for the rules themselves, and note that entries not listed here are either superseded by a later dated entry or carry no estimator semantics.",
+    "_note": "Navigation aid only. It records WHICH review entries carry governing rules for each pipeline stage; it does not restate any rule, value, divisor, threshold or rounding direction, and it does not indicate which of the entries named for a stage is the current one. A stage may name several entries where a later dated entry revises or reverses an earlier one on a specific point, so being listed here does NOT mean an entry is current in every respect, and being absent from here does NOT by itself establish that an entry is superseded. Read every entry named for a stage in /app/incident/rollout_review_log.md and apply the latest dated ruling on each individual point; the review log is authoritative and this index makes no claim about which entries remain in force.",
     "stages": {
       "canonicalization": [
         "CAB-2201",
         "CAB-2202",
         "CAB-2204",
         "CAB-2205",
-        "CAB-2207"
+        "CAB-2207",
+        "CAB-2258"
       ],
       "interval_semantics": [
         "CAB-2208"

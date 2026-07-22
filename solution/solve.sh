@@ -60,6 +60,27 @@ mkdir -p /app/output
 chown svc-outage:svc-outage /app/output
 chmod 0750 /app/output
 
+# Log directory per runbook: prune the rollout leftover, then hand the directory to
+# the service account and drop the world-writable mode.
+mkdir -p /var/log/outage-compile
+rm -f /var/log/outage-compile/compile.log.0
+chown -R svc-outage:svc-outage /var/log/outage-compile
+chmod 0750 /var/log/outage-compile
+
+# Rotation drop-in. The su/create lines keep rotated files owned by svc-outage.
+cat > /etc/logrotate.d/outage-compile <<'ROTEOF'
+/var/log/outage-compile/*.log {
+    daily
+    rotate 14
+    compress
+    missingok
+    notifempty
+    su svc-outage svc-outage
+    create 0640 svc-outage svc-outage
+}
+ROTEOF
+chmod 0644 /etc/logrotate.d/outage-compile
+
 # --- Restore the compiler itself and produce the responder outputs ---
 
 cp "${SCRIPT_DIR}/compile_outages_fixed.py" /app/workflow/compile_outages.py

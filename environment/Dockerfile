@@ -29,3 +29,12 @@ RUN printf '#!/bin/sh\nexec python3 /app/workflow/compile_outages.py.legacy "$@"
     && rm -f /etc/cron.d/outage-compile \
     && mkdir -p /app/output \
     && chmod 0777 /app/output
+
+# Log wiring the rollout also left wrong: the compile log directory is world-writable
+# and still root-owned, its rotation drop-in was never installed, and an unrotated
+# leftover from the crashed run is still sitting in the directory.
+RUN mkdir -p /var/log/outage-compile \
+    && chmod 0777 /var/log/outage-compile \
+    && printf 'rollout 4711 aborted mid-compile\n' > /var/log/outage-compile/compile.log.0 \
+    && printf '' > /var/log/outage-compile/compile.log \
+    && rm -f /etc/logrotate.d/outage-compile
